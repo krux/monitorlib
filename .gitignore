@@ -30,3 +30,4 @@ pip-log.txt
 .Python
 include/
 lib/
+man/
