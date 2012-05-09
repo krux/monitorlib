@@ -149,6 +149,21 @@ def test_status_line():
         test.eq_(ck.status_line(tpl), line)
 
 
+def test_ok():
+    msg = 'Everything is okay.'
+    test.eq_(ck.ok(msg), "status ok %s" % msg)
+
+
+def test_warn():
+    msg = 'Everything is warning.'
+    test.eq_(ck.warn(msg), "status warn %s" % msg)
+
+
+def test_err():
+    msg = 'Everything is an error.'
+    test.eq_(ck.err(msg), "status err %s" % msg)
+
+
 def test_metric_tuple():
     results = [('metric', 'one', 'int', '1'),
                ('metric', 'two', 'string', 'tea for two and two for tea'),
@@ -190,11 +205,3 @@ def test_sort_by_priority():
 def test_highest_priority():
     ### At this point we've tested get_status_type() so we can use it.
     test.eq_(ck.get_status_type(ck.highest_priority(STATUS_CASES)), 'err')
-
-
-def test_add_status():
-    lines = [STATUS_CASES[0], METRIC_CASES[0]]
-    warn  = STATUS_CASES[1]
-    err = STATUS_CASES[2]
-    test.eq_(ck.add_status(warn, lines)[0], warn)
-    test.eq_(ck.add_status(err, lines)[0], err)

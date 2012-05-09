@@ -142,6 +142,30 @@ def status_line(tpl):
     return is_status_line(line) and line
 
 
+def ok(message):
+    """
+    Given a message, return a status line representing an 'ok'
+    status with that message.
+    """
+    return status_line(('status', 'ok', message))
+
+
+def warn(message):
+    """
+    Given a message, return a status line representing an 'warn'
+    status with that message.
+    """
+    return status_line(('status', 'warn', message))
+
+
+def err(message):
+    """
+    Given a message, return a status line representing an 'err'
+    status with that message.
+    """
+    return status_line(('status', 'err', message))
+
+
 def metric_tuple(line):
     """
     Given a Cloudkick-formatted metric line, return a tuple ('metric',
@@ -196,14 +220,17 @@ def highest_priority(lines):
     return sort_by_priority(get_status_lines(lines))[0]
 
 
-def add_status(line, output_lines):
+def add_lines(lines, output_lines):
     """
-    Adds a status line to a list of output lines. If another status
-    line is already present and the new status has an equal or higher
-    priority, over-write the existing status.
+    Adds new lines to a list of output lines. For each new status
+    line, add the line if its priority is greater than all existing
+    status lines. For each new metric line, add the line. Ignore any
+    other line.
     """
-    status = highest_priority([line] + output_lines)
-    return [status] + [l for l in output_lines if not is_status_line(l)]
+    status = highest_priority([line for line in (lines + output_lines)
+                               if is_status_line(line)])
+    return [status] + [line for line in (lines + output_lines)
+                       if is_metric_line(line)]
 
 
 if __name__ == '__main__':
