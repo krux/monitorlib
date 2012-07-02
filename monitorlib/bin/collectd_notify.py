@@ -1,4 +1,4 @@
-#!/usr/bin/env kpython
+#!/usr/bin/env python
 #
 # Author: Charlie Schluting <charlie@krux.com>
 #
@@ -94,7 +94,8 @@ if __name__ == '__main__':
     if options.server:
         host, port = options.server.split(":")
         send_to_socket(json.dumps(message), host, port)
-
-    if options.http_server:
+    elif options.http_server:
         post_to_url(message, options.http_server)
+    else
+        print message
 
