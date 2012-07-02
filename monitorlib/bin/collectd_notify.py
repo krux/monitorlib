@@ -47,11 +47,9 @@ def send_to_socket(message, host, port):
     Sends message (arg1) to host/port via tcp
     """
     sock = socket.socket()
-    try:
-        sock.connect((host, int(port)))
-        sock.sendall(message)
-    except:
-        logging.error("sending data to %s failed" % host)
+
+    sock.connect((host, int(port)))
+    sock.sendall(message)
     sock.close()
 
 def post_to_url(message, url):
