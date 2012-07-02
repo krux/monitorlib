@@ -17,10 +17,13 @@ import socket
 import os
 import sys
 import logging
-import simplejson as json
 import urllib
 import urllib2
 from optparse import OptionParser
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 fqdn = socket.getfqdn()
 
