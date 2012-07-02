@@ -33,19 +33,14 @@ def convert_to_json(message):
     """
     converts input (as formatted by collectd) to json
     """
-    output = {}
 
-    for line in message.split('\n'):
-        if 'Severity' in line:
-            output.update({"Severity": line.split(":")[1].lstrip(' ')})
-        elif 'Time' in line:
-            output.update({"Time": line.split(":")[1].lstrip(' ')})
-        elif 'Host' in line:
-            output.update({"Host": line.split(":")[1].lstrip(' ')})
-        elif len(line) > 0:
-            output.update({"Message": line})
+    output = dict([line.split(': '), 1) for line in message.split('\n')[:2]])
+    try:
+        output.update(('Message', ' '.join(message.split('\n')[3:]))
+    except IndexError:
+        output.update('Message', '')
 
-    return output
+    return json.dumps(output)
 
 def send_to_socket(message, host, port):
     """
@@ -94,7 +89,7 @@ if __name__ == '__main__':
 
     if options.server:
         host, port = options.server.split(":")
-        send_to_socket(json.dumps(message), host, port)
+        send_to_socket(message, host, port)
     elif options.http_server:
         post_to_url(message, options.http_server)
     else
