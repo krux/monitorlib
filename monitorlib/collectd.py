@@ -19,16 +19,16 @@ import socket
 import os
 import sys
 
-if 'COLLECTD_HOSTNAME' in os.environ: fqdn = os.environ['COLLECTD_HOSTNAME']
-else: fqdn = socket.getfqdn()
+if 'COLLECTD_HOSTNAME' in os.environ: FQDN = os.environ['COLLECTD_HOSTNAME']
+else: FQDN = socket.getfqdn()
 
-if 'COLLECTD_INTERVAL' in os.environ: interval = os.environ['COLLECTD_INTERVAL']
-else: interval = "60"
+if 'COLLECTD_INTERVAL' in os.environ: INTERVAL = os.environ['COLLECTD_INTERVAL']
+else: INTERVAL = "60"
 
 def notify_output(severity, message):
     ''' formats and prints out a collectd notification '''
     timestamp = int(time.mktime(time.gmtime()))
-    output = "PUTNOTIF severity=%s time=%i host=%s message=%s" % (severity, timestamp, fqdn, message)
+    output = "PUTNOTIF severity=%s time=%i host=%s message=%s" % (severity, timestamp, FQDN, message)
     print output
 
 def failure(string):
@@ -41,7 +41,7 @@ def ok(string):
     notify_output('okay', string)
 
 def metric(path, value):
-    output = "PUTVAL %s/%s interval=%s N:%s" % (fqdn, path, interval, value)
+    output = "PUTVAL %s/%s interval=%s N:%s" % (FQDN, path, INTERVAL, value)
     print output
 
 
