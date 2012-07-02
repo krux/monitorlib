@@ -44,7 +44,7 @@ def convert_to_json(message):
 
 def send_to_socket(message, host, port):
     """
-    Sends message (arg1) to host/port via tcp
+    Sends message to host/port via tcp
     """
     sock = socket.socket()
 
@@ -54,7 +54,7 @@ def send_to_socket(message, host, port):
 
 def post_to_url(message, url):
     """
-    HTTP POSTs message (arg1) to url (arg2)
+    HTTP POSTs message to url
     """
     req = urllib2.Request(url, json.dumps(message), {'Content-Type': 'application/json'})
     f = urllib2.urlopen(req)
