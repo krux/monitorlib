@@ -64,7 +64,7 @@ def post_to_url(message, url):
     HTTP POSTs message (arg1) to url (arg2)
     """
     req = urllib2.Request(url, json.dumps(message), {'Content-Type': 'application/json'})
-    f = urllib2.urlopen(url, json.dumps(message))
+    f = urllib2.urlopen(req)
     resp = f.read()
     f.close()
 
