@@ -27,6 +27,7 @@ INTERVAL = os.environ.get('COLLECTD_INTERVAL', "60")
 def notify_output(severity, message):
     ''' formats and returns a collectd notification (str) '''
     timestamp = int(time.mktime(time.gmtime()))
+    #TODO: insert name of calling script in message
     return "PUTNOTIF severity=%s time=%i host=%s message=%s" % (severity, timestamp, FQDN, message)
 
 def failure(string):
