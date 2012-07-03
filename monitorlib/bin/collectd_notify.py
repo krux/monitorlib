@@ -34,9 +34,9 @@ def convert_to_json(message):
     converts input (as formatted by collectd) to json
     """
 
-    output = dict([line.split(': '), 1) for line in message.split('\n')[:2]])
+    output = dict([line.split(': ', 1) for line in message.split('\n')[:3]])
     try:
-        output.update(('Message', ' '.join(message.split('\n')[3:]))
+        output.update({'Message': ''.join(message.split('\n')[3:])})
     except IndexError:
         output.update('Message', '')
 
@@ -90,6 +90,6 @@ if __name__ == '__main__':
         send_to_socket(message, host, port)
     elif options.http_server:
         post_to_url(message, options.http_server)
-    else
+    else:
         print message
 
