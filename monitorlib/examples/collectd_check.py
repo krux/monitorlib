@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env kpython
 #
 # Author: Charlie Schluting <charlie@krux.com>
 #
