@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/bin/kpython
 #
 # Author: Charlie Schluting <charlie@krux.com>
 #
@@ -10,6 +10,9 @@
   Also, supports sending to pagerduty if the message has the text 'PD', and pd-key command
   line option was used.
 
+  If the text contains ENDOFEMAIL, an email alert will be sent to addresses in the list before
+  that string.
+
 input format:
 
 Severity: FAILURE
@@ -19,6 +22,7 @@ Host: myhost.mydomain.org
 This is a message...
 
 """
+
 import time
 import socket
 import os
@@ -26,8 +30,11 @@ import sys
 import logging
 import urllib
 import urllib2
+import smtplib
 from optparse import OptionParser
 import monitorlib.pagerduty as pagerduty
+from email.MIMEMultipart import MIMEMultipart
+from email.MIMEText import MIMEText
 
 try:
     import simplejson as json
@@ -72,13 +79,42 @@ def send_to_pagerduty(key, message):
     """
     Sends alert to pager duty - you must call authenticate() first
     """
-    authenticate(key)
+    pagerduty.authenticate(key)
 
     if 'OKAY' in message['Severity']:
-        pagerduty.event('resolve', message['Message'])
+        pagerduty.event('resolve', message['Message'].lstrip('PD'))
 
     elif 'FAILURE' or 'WARNING' in message['Serverity']:
-        pagerduty.event('trigger', message['Message'])
+        pagerduty.event('trigger', message['Message'].lstrip('PD'))
+
+def send_to_email(address, message):
+    """
+    Sends alert via email
+    """
+    print "emailing: ", address
+
+    me = 'collectd@krux.com'
+    you = str(address)
+
+    msg = MIMEMultipart()
+    msg['Subject'] = '[collectd] %s %s' % (message['Severity'], message['Message'])
+    msg['From'] = me
+    msg['To'] = you
+    body = MIMEText(str(message))
+    msg.attach(body)
+
+    s = smtplib.SMTP('localhost')
+    s.sendmail(me, [you], msg.as_string())
+    s.quit()
+
+    pass
+
+def check_redis_alerts_disabled(message):
+    """
+    Check redis to see if alerts are disabled for this host - times out after 2 seconds,
+    to not block on an unreachable redis server.
+    """
+    return False
 
 if __name__ == '__main__':
 
@@ -86,7 +122,8 @@ if __name__ == '__main__':
     parser.add_option("-d", "--debug", default=None, action="store_true", help="enable debug output")
     parser.add_option("--http-server", help="HTTP server to post message to (url)")
     parser.add_option("--server", help="server to post message to (host:port) via TCP")
-    parser.add_option("--pd-key", help="your pagerduty service_key, enables paging")
+    parser.add_option("--pd-key", "--pagerduty-key", help="your pagerduty service_key, enables paging")
+    parser.add_option("--datastore", help="data storage mechanism for host state ([dis]/[en]abled nofitications)")
     (options, args) = parser.parse_args()
 
     # set up logging
@@ -103,15 +140,22 @@ if __name__ == '__main__':
 
     message = convert_to_json(stdin)
 
+    # check if notifications for this host are disabled, and exit if so
+    if options.datastore and locals()['check_' + options.datastore + '_alerts_disabled'](message):
+        sys.exit(0)
+
     if options.server:
         host, port = options.server.split(":")
         send_to_socket(message, host, port)
     elif options.http_server:
         post_to_url(message, options.http_server)
-    else:
-        print message
+
+    message = json.loads(message)
+    if 'ENDEMAIL' in message['Message']:
+        address, message['Message'] = message['Message'].split('ENDEMAIL')
+        send_to_email(address, message)
 
     if options.pd_key and 'PD' in message['Message']:
-        send_to_pagerduty(options.pd_key, message.lstrip('PD'))
+        send_to_pagerduty(options.pd_key, message)
 
 
