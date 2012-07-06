@@ -11,8 +11,8 @@
  Then, you can use collectd.failure("message content"),
  and the lib will output a notification in the correct format (timestamp, hostname, etc).
 
- likewise, you can use it to output values:
- collectd.metric("path/to/metric", value)
+ likewise, you can use it to output values (make sure last item is in /usr/share/collectd/types.db):
+ collectd.metric("path/to/record", value)
 
  ==
  The following options require using bin/collectd_notify as the notification plugin:

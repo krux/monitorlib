@@ -21,12 +21,12 @@ if __name__ == '__main__':
         print collectd.ok("everything is fine", pageme=True)
 
     elif check_value is False:
-        print collectd.warning("something looks strange", False, email=['charlie@krux.com'])
+        print collectd.warning("something looks strange", False, email='charlie@krux.com')
 
     elif check_value is None:
-        print collectd.failure("something is definitely broken", page=True, email=['charlie@krux.com'])
+        print collectd.failure("something is definitely broken", page=True, email='charlie@krux.com')
 
-    # output a metric:
-    print collectd.metric("testing/service_bar", 5)
+    # output a metric (make sure the last item is valid in /usr/share/collectd/types.db!):
+    print collectd.metric("testing/records", 5)
 
 
