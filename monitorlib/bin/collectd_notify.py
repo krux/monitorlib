@@ -93,11 +93,14 @@ def send_to_email(address, message):
     """
     print "emailing: ", address
 
+    # if the pagerduty flag made it here, fix that before sending:
+    alert_text = message['Message'].lstrip('PD')
+
     me = 'collectd@krux.com'
     you = str(address)
 
     msg = MIMEMultipart()
-    msg['Subject'] = '[collectd] %s %s' % (message['Severity'], message['Message'])
+    msg['Subject'] = '[collectd] %s %s' % (message['Severity'], alert_text)
     msg['From'] = me
     msg['To'] = you
     body = MIMEText(str(message))
