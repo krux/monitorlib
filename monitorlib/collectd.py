@@ -227,9 +227,10 @@ def dispatch_alert(severity, message, page, email, url):
             # doesn't match? the state changed.
             state = 'transitioned'
     else:
+        # state file didn't exist - first-run of this check, don't alert.
         with open(state_file, 'w') as fh:
             fh.write(message['severity'])
-        state = 'transitioned'
+        state = 'new'
 
     # write the current state:
     with open(state_file, 'w') as fh:
