@@ -57,6 +57,7 @@ import time
 import socket
 import os
 import sys
+import subprocess
 import inspect
 import logging
 import urllib2
@@ -139,7 +140,8 @@ def send_to_pagerduty(key, message):
         if 'REDIS_CONFIG' in globals():
             set_pagerduty_store('redis', REDIS_CONFIG)
         else:
-            set_pagerduty_store()
+            if 'STATE_DIR' in globals():
+                set_pagerduty_store('file', STATE_DIR.lstrip('/') + "/incident_keys")
 
     pagerduty.authenticate(key)
 
@@ -172,6 +174,14 @@ def send_to_email(address, message):
     s = smtplib.SMTP('localhost')
     s.sendmail(me, [you], msg.as_string())
     s.quit()
+
+def cmd(command):
+    """
+    Helper for running shell commands with subprocess(). Returns:
+    (stdout, stderr)
+    """
+    process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    return process.communicate()
 
 def check_redis_alerts_disabled(message):
     """
