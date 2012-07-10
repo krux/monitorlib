@@ -160,13 +160,13 @@ def send_to_email(address, message):
     """
     print "emailing: ", address
 
-    alert_subject = "%s %s: %s %s" % (message['host'], message['plugin'], message['severity'].upper(), message['message'])
+    alert_subject = "%s %s: %s" % (message['host'], message['plugin'], message['message'])
 
     me = 'collectd@krux.com'
     you = str(address)
 
     msg = MIMEMultipart()
-    msg['Subject'] = '[collectd] %s %s' % (message['severity'], alert_subject)
+    msg['Subject'] = '[collectd] %s %s' % (message['severity'].upper(), alert_subject)
     msg['From'] = me
     msg['To'] = you
     body = MIMEText(str(message))
