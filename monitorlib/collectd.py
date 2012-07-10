@@ -39,7 +39,7 @@
         Location to store state information on outstanding alerts.
         To use redis: call set_redis_config() (see below)
         Default is: set_pagerduty_store('file', '/tmp/incident_keys')
-    === set_redis_config(writer_host, reader_host, port, password, [db]) to enable checking
+    === set_redis_config(writer_host, reader_host, writer_port, reader_port, password, [db]) to enable checking
         with redis for disabled alerts
 
   == metric("testing/records", int)
@@ -91,11 +91,12 @@ def set_pagerduty_key(key):
     global PD_KEY
     PD_KEY = key
 
-def set_redis_config(writer_host, reader_host, port, password, db='db0'):
+def set_redis_config(writer_host, reader_host, writer_port, reader_port, password, db='db0'):
     global REDIS_CONFIG
     REDIS_CONFIG = { 'writer': writer_host,
                      'reader': reader_host,
-                     'port': port,
+                     'writer_port': writer_port,
+                     'reader_port': reader_port,
                      'passwd': password,
                      'db': db,
                    }
@@ -190,8 +191,8 @@ def check_redis_alerts_disabled(message):
     """
     conf = REDIS_CONFIG
 
-    # key: host value: list of plugins that are disabled
-    conn = redis.Redis(conf['reader'], conf['port'], conf['db'], conf['passwd'], socket_timeout=2)
+    # key: host, value: list of plugins that are disabled (or '*' for all)
+    conn = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'], socket_timeout=2)
     result = conn.get(message['host'])
 
     if result and ('*' in result or message['plugin'] in result):

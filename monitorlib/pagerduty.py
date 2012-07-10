@@ -41,15 +41,20 @@ def authenticate(key):
     global PD_KEY
     PD_KEY = key
 
-def redis_conn(conf):
+def redis_conn(conf, mode):
     """
     Create and return a redis connection, if you haven't done so already
     """
-    global REDIS
-    if 'REDIS' not in globals():
-        REDIS = redis.Redis(conf['reader'], conf['port'], conf['db'], conf['passwd'], socket_timeout=2)
-
-    return REDIS
+    global REDIS_READER
+    global REDIS_WRITER
+    if 'read' in mode:
+        if 'REDIS_READER' not in globals():
+            REDIS_READER = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'], socket_timeout=2)
+        return REDIS_READER
+    elif 'write' in mode:
+        if 'REDIS_WRITER' not in globals():
+            REDIS_WRITER = redis.Redis(conf['writer'], conf['writer_port'], conf['db'], conf['passwd'], socket_timeout=2)
+        return REDIS_WRITER
 
 def get_incident_key(store_key):
     """
@@ -68,7 +73,7 @@ def get_incident_key(store_key):
         return keys.get(store_key)
 
     elif 'redis' in KEY_STORAGE:
-        conn = redis_conn(STORAGE_CONFIG)
+        conn = redis_conn(STORAGE_CONFIG, 'read')
         return conn.get(store_key)
 
 def del_incident_key(store_key):
@@ -85,7 +90,7 @@ def del_incident_key(store_key):
         pickle.dump(keys, open(STORAGE_CONFIG, 'w'))
 
     elif 'redis' in KEY_STORAGE:
-        conn = redis_conn(STORAGE_CONFIG)
+        conn = redis_conn(STORAGE_CONFIG, 'write')
         return conn.delete(store_key)
 
 def add_incident_key(store_key, incident_key):
@@ -107,7 +112,7 @@ def add_incident_key(store_key, incident_key):
         pickle.dump(keys, open(STORAGE_CONFIG, 'w'))
 
     elif 'redis' in KEY_STORAGE:
-        conn = redis_conn(STORAGE_CONFIG)
+        conn = redis_conn(STORAGE_CONFIG, 'write')
         return conn.set(store_key, incident_key)
 
 def construct(service_key, event_type, desc, store_key, details):
