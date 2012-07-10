@@ -16,15 +16,22 @@ import time
 import socket
 import urllib2
 import cPickle as pickle
+try:
+    import redis
+except ImportError:
+    pass
 
 try:
     import simplejson as json
 except ImportError:
     import json
 
-global PD_KEY
-global KEY_STORAGE
-KEY_STORAGE = "/tmp/incident_keys"
+def set_datastore(kind, config):
+    global KEY_STORAGE
+    KEY_STORAGE = kind
+
+    global STORAGE_CONFIG
+    STORAGE_CONFIG = config
 
 def authenticate(key):
     """
@@ -33,58 +40,82 @@ def authenticate(key):
     global PD_KEY
     PD_KEY = key
 
-def get_incident_key(desc):
+def redis_conn(conf):
+    """
+    Create and return a redis connection, if you haven't done so already
+    """
+    global REDIS
+    if 'REDIS' not in globals():
+        REDIS = redis.Redis(conf['reader'], conf['port'], conf['db'], conf['passwd'], socket_timeout=2)
+
+    return REDIS
+
+def get_incident_key(store_key):
     """
     Returns an incident key if one matches 'desc', otherwise returns an empty string.
     """
-    if not os.path.exists(KEY_STORAGE):
-        return None
+    if 'file' in KEY_STORAGE:
+        if not os.path.exists(STORAGE_CONFIG):
+            return None
 
-    try:
-        keys = pickle.load(open(KEY_STORAGE, 'r'))
-    except EOFError:
-        return None
+        try:
+            keys = pickle.load(open(STORAGE_CONFIG, 'r'))
+        except EOFError:
+            return None
 
-    return keys.get(desc)
+        return keys.get(store_key)
 
-def del_incident_key(desc):
+    elif 'redis' in KEY_STORAGE:
+        conn = redis_conn(STORAGE_CONFIG)
+        return conn.get(store_key)
+
+def del_incident_key(store_key):
     """
     Removes an incident key from key storage
     """
-    try:
-        keys = pickle.load(open(KEY_STORAGE, 'r'))
-    except EOFError:
-        return None
+    if 'file' in KEY_STORAGE:
+        try:
+            keys = pickle.load(open(STORAGE_CONFIG, 'r'))
+        except EOFError:
+            return None
 
-    del keys[desc]
-    pickle.dump(keys, open(KEY_STORAGE, 'w'))
+        del keys[store_key]
+        pickle.dump(keys, open(STORAGE_CONFIG, 'w'))
 
-def add_incident_key(desc, key):
+    elif 'redis' in KEY_STORAGE:
+        conn = redis_conn(STORAGE_CONFIG)
+        return conn.delete(store_key)
+
+def add_incident_key(store_key, incident_key):
     """
     Adds an incident key to key storage
     """
-    if not os.path.exists(KEY_STORAGE):
-        fh = open(KEY_STORAGE, 'w')
-        pickle.dump({}, fh)
-        fh.close
+    if 'file' in KEY_STORAGE:
+        if not os.path.exists(STORAGE_CONFIG):
+            fh = open(STORAGE_CONFIG, 'w')
+            pickle.dump({}, fh)
+            fh.close
 
-    try:
-        keys = pickle.load(open(KEY_STORAGE, 'r'))
-    except EOFError:
-        keys = {}
+        try:
+            keys = pickle.load(open(STORAGE_CONFIG, 'r'))
+        except EOFError:
+            keys = {}
 
-    keys.update({desc: key})
-    pickle.dump(keys, open(KEY_STORAGE, 'w'))
+        keys.update({store_key: incident_key})
+        pickle.dump(keys, open(STORAGE_CONFIG, 'w'))
 
+    elif 'redis' in KEY_STORAGE:
+        conn = redis_conn(STORAGE_CONFIG)
+        return conn.set(store_key, incident_key)
 
-def construct(key, event_type, desc, details):
+def construct(service_key, event_type, desc, store_key, details):
     """
     Constructs pagerduty json for sending, by looking up the incident_key
     in persistent storage, to see if this is a duplicate.
     """
 
-    return {'service_key': key, 'event_type': event_type,
-            'description': desc, 'incident_key': get_incident_key(desc),
+    return {'service_key': service_key, 'event_type': event_type,
+            'description': desc, 'incident_key': get_incident_key(store_key),
             'details': details
            }
 
@@ -110,7 +141,7 @@ def event(event_type, desc, details=None):
     # the host & script name from the alert message:
     host_script = desc.split(':')[0]
 
-    message = construct(PD_KEY, event_type, desc, details)
+    message = construct(PD_KEY, event_type, desc, host_script, details)
 
     # is this is an OKAY message, don't send to PD unless we have an incident key:
     if 'resolve' in event_type and message['incident_key']:
@@ -118,6 +149,7 @@ def event(event_type, desc, details=None):
     elif 'trigger' in event_type:
         resp = json.loads(send_to_pagerduty(message))
     else:
+        print message
         print "nothing to do"
         sys.exit(0)
 
