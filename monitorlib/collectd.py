@@ -76,7 +76,7 @@ try:
 except ImportError:
     pass
 
-FQDN = os.environ.get('COLLECTD_HOSTNAME', socket.getfqdn())
+FQDN = os.environ.get('COLLECTD_HOSTNAME', socket.gethostname())
 INTERVAL = os.environ.get('COLLECTD_INTERVAL', "60")
 #CALLER = os.path.basename(inspect.stack()[-1][1])
 CALLER = os.path.basename(sys.argv[0])
