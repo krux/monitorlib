@@ -7,6 +7,7 @@
 
     Usage:
     pagerduty.authenticate(key)
+    pageduty.set_datastore('file', '/tmp/incident_keys') # or 'redis' - see collectd.py
     pagerduty.event(event_type, message, [details_json])
 """
 
@@ -52,7 +53,7 @@ def redis_conn(conf):
 
 def get_incident_key(store_key):
     """
-    Returns an incident key if one matches 'desc', otherwise returns an empty string.
+    Returns an incident key if one matches 'store_key', otherwise returns None.
     """
     if 'file' in KEY_STORAGE:
         if not os.path.exists(STORAGE_CONFIG):
@@ -61,6 +62,7 @@ def get_incident_key(store_key):
         try:
             keys = pickle.load(open(STORAGE_CONFIG, 'r'))
         except EOFError:
+            # empty file?
             return None
 
         return keys.get(store_key)
@@ -71,7 +73,7 @@ def get_incident_key(store_key):
 
 def del_incident_key(store_key):
     """
-    Removes an incident key from key storage
+    Removes an incident_key from key storage
     """
     if 'file' in KEY_STORAGE:
         try:
@@ -110,8 +112,8 @@ def add_incident_key(store_key, incident_key):
 
 def construct(service_key, event_type, desc, store_key, details):
     """
-    Constructs pagerduty json for sending, by looking up the incident_key
-    in persistent storage, to see if this is a duplicate.
+    Constructs pagerduty json for sending; looks up the incident_key
+    in persistent storage, and adds it.
     """
 
     return {'service_key': service_key, 'event_type': event_type,
@@ -121,8 +123,7 @@ def construct(service_key, event_type, desc, store_key, details):
 
 def send_to_pagerduty(message):
     """
-    Sends message to pagerduty, and records the response's incident_key for later use
-    (unless the event_type was 'resolve', then deletes key if it exists).
+    Sends message to pagerduty, returns the response.
     """
 
     pd_url = 'https://events.pagerduty.com/generic/2010-04-15/create_event.json'
@@ -155,8 +156,10 @@ def event(event_type, desc, details=None):
 
     # Response from PD: {"status":"success","message":"Event processed","incident_key":"74c804e0a92c012fdea322000af842a7"}
     if 'resolve' in event_type:
+        # don't care what the response was - just make sure to remove it from KEY_STORAGE
         del_incident_key(host_script)
     else:
+        # store the incident_key returned by pagerduty
         add_incident_key(host_script, resp['incident_key'])
 
 
