@@ -16,17 +16,22 @@ if __name__ == '__main__':
     # fake a check, that outputs True/False:
     check_value = False
 
+    # enable datastore checking (for host alerts being disabled):
+    collectd.set_redis_config('write-host', 'read-host', 6379, 'password')
+
+    # enable pagerduty:
+    collectd.set_pagerduty_key('key....')
 
     if check_value:
-        print collectd.ok("everything is fine", pageme=True)
+        collectd.ok("everything is fine", page=True)
 
     elif check_value is False:
-        print collectd.warning("something looks strange", False, email='charlie@krux.com')
+        collectd.warning("something looks strange", False, email='charlie@krux.com')
 
     elif check_value is None:
-        print collectd.failure("something is definitely broken", page=True, email='charlie@krux.com')
+        collectd.failure("something is definitely broken", page=True)
 
-    # output a metric (make sure the last item is valid in /usr/share/collectd/types.db!):
-    print collectd.metric("testing/records", 5)
+    # output a metric:
+    print collectd.metric("testing/counter", 5)
 
 
