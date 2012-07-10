@@ -100,6 +100,10 @@ def set_redis_config(writer_host, reader_host, port, password, db='db0'):
                    }
     set_datastore('redis')
 
+def set_state_dir(dir="/tmp"):
+    global STATE_DIR
+    STATE_DIR = dir
+
 def send_to_socket(message, host, port):
     """
     Sends message to host/port via tcp
@@ -180,7 +184,7 @@ def check_redis_alerts_disabled(message):
     conn = redis.Redis(conf['reader'], conf['port'], conf['db'], conf['passwd'], socket_timeout=2)
     result = conn.get(message['host'])
 
-    if '*' in result or message['plugin'] in result:
+    if result and ('*' in result or message['plugin'] in result):
         return True
     else:
         return False
@@ -196,17 +200,42 @@ def dispatch_alert(severity, message, page, email, url):
             logging.error("must call redis_config(), first")
         elif check_redis_alerts_disabled(message):
             logging.info("alerting disabled, supressing alert for: %s, %s" % (message['host'], message['plugin']))
-        #    sys.exit(0)
+            return None
 
-    # if paging was requested, do it
-    if page:
+    # get last_state:
+    state_file = STATE_DIR + "/%s" % message['plugin']
+
+    if not os.path.exists(STATE_DIR) or not os.access(STATE_DIR, os.W_OK):
+        logging.error("state_dir: no such file or directory, or unwritable")
+        sys.exit(0)
+
+    if os.path.exists(state_file):
+        with open(state_file, 'r') as fh:
+            state = fh.readline()
+        if state not in message['severity']:
+            # doesn't match? the state changed.
+            state = 'transitioned'
+    else:
+        with open(state_file, 'w') as fh:
+            fh.write(message['severity'])
+        state = 'transitioned'
+
+    # write the current state:
+    with open(state_file, 'w') as fh:
+        fh.write(message['severity'])
+
+    # if paging was requested, do it, unless the state is the same as last time
+    if page and 'transitioned' in state:
         if 'PD_KEY' not in globals():
             logging.error("must call set_pagerduty_key(), first")
         else:
             send_to_pagerduty(PD_KEY, message)
 
-    if email:
+    # only email if state is new since last time
+    if email and 'transitioned' in state:
         send_to_email(email, message)
+
+    # if 'url' was requested, always post to it regardless of state
     if url:
         post_to_url(message, url)
 

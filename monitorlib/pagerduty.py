@@ -150,9 +150,8 @@ def event(event_type, desc, details=None):
     elif 'trigger' in event_type:
         resp = json.loads(send_to_pagerduty(message))
     else:
-        print message
-        print "nothing to do"
-        sys.exit(0)
+        # it was a 'resolve' and we didn't have the incident_key already (can't delete). done.
+        return None
 
     # Response from PD: {"status":"success","message":"Event processed","incident_key":"74c804e0a92c012fdea322000af842a7"}
     if 'resolve' in event_type:
