@@ -206,7 +206,11 @@ def check_redis_alerts_disabled(message):
     if not conn:
         return False
     else:
-        result = conn.get(message['host'])
+        global_acks = conn.get('global')
+        if global_acks and ('*' in global_acks or message['plugin'] in global_acks):
+            return True
+        else:
+            result = conn.get(message['host'])
 
     if result and ('*' in result or message['plugin'] in result):
         return True
@@ -220,7 +224,7 @@ def dispatch_alert(severity, message, page, email, url):
 
     message = json.loads('{"host": "%s", "plugin": "%s", "severity": "%s", "message": "%s"}' % (FQDN.split('.')[0], CALLER, severity, message))
 
-    # check if notifications for this host are disabled, and exit if so
+    # check if notifications for this host are disabled, and bail if so
     if DATASTORE and 'redis' in DATASTORE:
         if 'REDIS_CONFIG' not in globals():
             logging.error("must call redis_config(), first")
@@ -233,7 +237,7 @@ def dispatch_alert(severity, message, page, email, url):
 
     if not os.path.exists(STATE_DIR) or not os.access(STATE_DIR, os.W_OK):
         logging.error("state_dir: no such file or directory, or unwritable")
-        sys.exit(0)
+        return None
 
     if os.path.exists(state_file):
         with open(state_file, 'r') as fh:
