@@ -28,6 +28,9 @@ except ImportError:
     import json
 
 def set_datastore(kind, config):
+    """
+    sets datastore type and config
+    """
     global KEY_STORAGE
     KEY_STORAGE = kind
 

@@ -4,7 +4,7 @@
 """
  Library to make outputting notifications and values in collectd plugins easier.
  Handles notifications itself; supports email, pagerduty, arbitrary URL to POST
- JSON to.
+ JSON to (or even raw TCP sending of JSON).
 
  = Usage:
  See: examples/collectd_check.py
@@ -12,24 +12,21 @@
  Within your own collectd plugin, simply:
  import monitorlib.collectd as collectd
 
- Then, you can use collectd.[warning|ok|failure]("message content"),
- and the lib will output a notification in the correct
- format (timestamp, hostname, etc).
+ Then, you can use collectd.[warning|ok|failure]("message content", [options]).
 
  likewise, you can use it to output values:
  collectd.metric("path/to/counter", value)
 
-
  = Interface docs:
 
   == ok("status message", [page=True], [email='A@host,B@host'], [url])
-  == warning("status message", [page=True], [email='A@host,B@host'], [url])
+  == warning("status message", [page=False], [email='A@host,B@host'], [url])
   == failure("status message", [page=True], [email='A@host,B@host'], [url])
 
   Arguments:
   message: text of the alert
-  page: set to true to initiate sending to pagerduty. Must have collectdlib_config.py
-        configured with PD_KEY (service_key from pagerduty)
+  page: set to true to initiate sending to pagerduty. Must have called
+        set_pagerduty_key() first.
   email: one or more comma-separated emails to send to: 'user@host,user2@host'
   url: URL to HTTP POST the JSON alert to
 
@@ -39,8 +36,8 @@
         Location to store state information on outstanding alerts.
         To use redis: call set_redis_config() (see below)
         Default is: set_pagerduty_store('file', '/tmp/incident_keys')
-    === set_redis_config(writer_host, reader_host, writer_port, reader_port, password, [db]) to enable checking
-        with redis for disabled alerts
+    === set_redis_config(writer_host, reader_host, writer_port, reader_port, password, [db])
+        to enable checking with redis for disabled alerts, and pagerduty incident_keys.
 
   == metric("testing/records", int)
 
@@ -51,6 +48,15 @@
           Krux-specific: always append /counter, and it'll be removed by graphite.
           To get stats.$env.ops.collectd.$host.my_metric, use "my_metric/counter".
   value: integer value
+
+ = Thoughts:
+  You can use this to send to pagerduty or elsewhere directly through your service
+  check plugins. But, that's old-school nagios style.
+  Ideally, you'll simply wrap this library to set the defaults to False for everything
+  but the URL argument, which will cause this lib to POST JSON every time the check
+  runs. This should go to a decision engine (like riemann, for example), where you
+  can verify the state of other checks (LB status, cluster health, parent relationships,
+  etc) before alerting (or even displaying a status) for real.
 
 """
 import time
@@ -128,6 +134,9 @@ def post_to_url(message, url):
     return resp
 
 def set_pagerduty_store(kind='file', config='/tmp/incident_keys'):
+    """
+    sets PD storage method, and stores a variable to indicate this has been done
+    """
     global PD_STORAGE_CONFIGURED
     if pagerduty.set_datastore(kind, config):
         PD_STORAGE_CONFIGURED = True
@@ -193,7 +202,11 @@ def check_redis_alerts_disabled(message):
 
     # key: host, value: list of plugins that are disabled (or '*' for all)
     conn = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'], socket_timeout=2)
-    result = conn.get(message['host'])
+
+    if not conn:
+        return False
+    else:
+        result = conn.get(message['host'])
 
     if result and ('*' in result or message['plugin'] in result):
         return True
@@ -201,7 +214,9 @@ def check_redis_alerts_disabled(message):
         return False
 
 def dispatch_alert(severity, message, page, email, url):
-    ''' dispatch_alertes alerts based on params '''
+    """
+    dispatch_alertes alerts based on params, and keep state, etc...
+    """
 
     message = json.loads('{"host": "%s", "plugin": "%s", "severity": "%s", "message": "%s"}' % (FQDN.split('.')[0], CALLER, severity, message))
 
