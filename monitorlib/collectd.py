@@ -232,6 +232,9 @@ def dispatch_alert(severity, message, page, email, url):
             logging.info("alerting disabled, supressing alert for: %s, %s" % (message['host'], message['plugin']))
             return None
 
+    if 'STATE_DIR' not in globals():
+        set_state_dir()
+
     # get last_state:
     state_file = STATE_DIR + "/%s" % message['plugin']
 
