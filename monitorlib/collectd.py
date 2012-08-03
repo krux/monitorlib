@@ -236,6 +236,7 @@ def dispatch_alert(severity, message, page, email, url):
         set_state_dir()
 
     # get last_state:
+    state = 'new'
     state_file = STATE_DIR + "/%s" % message['plugin']
 
     if not os.path.exists(STATE_DIR) or not os.access(STATE_DIR, os.W_OK):
