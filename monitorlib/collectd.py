@@ -248,14 +248,12 @@ def dispatch_alert(severity, message, page, email, url):
             cmd("sudo chown %s %s" % (os.getenv('USER'), state_file))
 
         with open(state_file, 'r') as fh:
-            state = fh.readline()
-        if state not in message['severity']:
+            prev_state = fh.readline()
+        if prev_state not in message['severity']:
             # doesn't match? the state changed.
             state = 'transitioned'
     else:
         # state file didn't exist - first-run of this check, don't alert.
-        with open(state_file, 'w') as fh:
-            fh.write(message['severity'])
         state = 'new'
 
     # write the current state:
