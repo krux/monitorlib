@@ -15,7 +15,7 @@
  Then, you can use collectd.[warning|ok|failure]("message content", [options]).
 
  likewise, you can use it to output values:
- collectd.metric("path/to/counter", value)
+ collectd.metric("plugin-instance/type-instance", value)
 
  = Interface docs:
 
@@ -45,8 +45,8 @@
   metric: string of collectd metric (excluding host, it's added automatically) -
           make sure it's formatted as collectd expects, or it'll be dropped!
           (make sure last item is in /usr/share/collectd/types.db, to start)
-          Krux-specific: always append /counter, and it'll be removed by graphite.
-          To get stats.$env.ops.collectd.$host.my_metric, use "my_metric/counter".
+          Krux-specific: always use the counter type, and it'll be removed by graphite.
+          To get stats.$env.ops.collectd.$host.plugin.instance.foo, use "plugin-instance/counter-foo".
   value: integer value
 
  = Thoughts:
