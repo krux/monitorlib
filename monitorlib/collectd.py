@@ -19,9 +19,9 @@
 
  = Interface docs:
 
-  == ok("status message", [page=True], [email='A@host,B@host'], [url])
-  == warning("status message", [page=False], [email='A@host,B@host'], [url])
-  == failure("status message", [page=True], [email='A@host,B@host'], [url])
+  == ok("status message", [page=True], [email='A@host,B@host'], [url], [riemann])
+  == warning("status message", [page=False], [email='A@host,B@host'], [url], [riemann])
+  == failure("status message", [page=True], [email='A@host,B@host'], [url], [riemann])
 
   Arguments:
   message: text of the alert
@@ -29,6 +29,7 @@
         set_pagerduty_key() first.
   email: one or more comma-separated emails to send to: 'user@host,user2@host'
   url: URL to HTTP POST the JSON alert to
+  riemann: send event to riemann. must call configure_riemann() first.
 
   == optional configuration (required to enable some options):
     === set_pagerduty_key("12309423enfjsdjfosiejfoiw") to set pagerduty auth
@@ -38,6 +39,7 @@
         Default is: set_pagerduty_store('file', '/tmp/incident_keys')
     === set_redis_config(writer_host, reader_host, writer_port, reader_port, password, [db])
         to enable checking with redis for disabled alerts, and pagerduty incident_keys.
+    === configure_riemann(host, port) of the riemann server
 
   == metric("testing/records", int)
 
@@ -54,7 +56,7 @@
   check plugins. But, that's old-school nagios style.
   Ideally, you'll simply wrap this library to set the defaults to False for everything
   but the URL argument, which will cause this lib to POST JSON every time the check
-  runs. This should go to a decision engine (like riemann, for example), where you
+  runs. This should go to a decision engine (like riemann), where you
   can verify the state of other checks (LB status, cluster health, parent relationships,
   etc) before alerting (or even displaying a status) for real.
 
@@ -79,6 +81,11 @@ except ImportError:
 
 try:
     import redis
+except ImportError:
+    pass
+
+try:
+    import bernhard
 except ImportError:
     pass
 
@@ -107,6 +114,10 @@ def set_redis_config(writer_host, reader_host, writer_port, reader_port, passwor
                      'db': db,
                    }
     set_datastore('redis')
+
+def configure_riemann(host, port):
+    global RIEMANN_CONFIG
+    RIEMANN_CONFIG = { 'host': host, 'port': port, }
 
 def set_state_dir(dir="/tmp"):
     global STATE_DIR
@@ -217,7 +228,7 @@ def check_redis_alerts_disabled(message):
     else:
         return False
 
-def dispatch_alert(severity, message, page, email, url):
+def dispatch_alert(severity, message, page, email, url, riemann):
     """
     dispatch_alertes alerts based on params, and keep state, etc...
     """
@@ -279,16 +290,23 @@ def dispatch_alert(severity, message, page, email, url):
     if url:
         post_to_url(message, url)
 
+    # if 'riemann' was requested, always send the event to riemann
+    if riemann:
+        riemann = bernhard.Client(host=RIEMANN_CONFIG.get('host'), port=RIEMANN_CONFIG.get('port'))
+        riemann.send({ 'host': message['host'],
+                       'service': message['plugin'],
+                       'state': message['severity'],
+                       'description': message['message'],
+                     })
 
+def failure(string, page=False, email=False, url=False, riemann=False):
+    return dispatch_alert('failure', string, page, email, url, riemann)
 
-def failure(string, page=False, email=False, url=False):
-    return dispatch_alert('failure', string, page, email, url)
+def warning(string, page=False, email=False, url=False, riemann=False):
+    return dispatch_alert('warning', string, page, email, url, riemann)
 
-def warning(string, page=False, email=False, url=False):
-    return dispatch_alert('warning', string, page, email, url)
-
-def ok(string, page=False, email=False, url=False):
-    return dispatch_alert('okay', string, page, email, url)
+def ok(string, page=False, email=False, url=False, riemann=False):
+    return dispatch_alert('okay', string, page, email, url, riemann)
 
 def metric(path, value):
     ''' formats and returns a collectd metric value (str) '''
