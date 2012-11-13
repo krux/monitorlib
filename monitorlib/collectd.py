@@ -94,34 +94,10 @@ INTERVAL = os.environ.get('COLLECTD_INTERVAL', "60")
 #CALLER = os.path.basename(inspect.stack()[-1][1])
 CALLER = os.path.basename(sys.argv[0])
 TIME = int(time.mktime(time.gmtime()))
-DATASTORE = None
-
-def set_datastore(store):
-    global DATASTORE
-    DATASTORE = store
 
 def set_pagerduty_key(key):
     global PD_KEY
     PD_KEY = key
-
-def set_redis_config(writer_host, reader_host, writer_port, reader_port, password, db='db0'):
-    global REDIS_CONFIG
-    REDIS_CONFIG = { 'writer': writer_host,
-                     'reader': reader_host,
-                     'writer_port': writer_port,
-                     'reader_port': reader_port,
-                     'passwd': password,
-                     'db': db,
-                   }
-    set_datastore('redis')
-
-def configure_riemann(host, port):
-    global RIEMANN_CONFIG
-    RIEMANN_CONFIG = { 'host': host, 'port': port, }
-
-def set_state_dir(dir="/tmp"):
-    global STATE_DIR
-    STATE_DIR = dir
 
 def send_to_socket(message, host, port):
     """
@@ -196,120 +172,176 @@ def send_to_email(address, message):
     s.sendmail(me, [you], msg.as_string())
     s.quit()
 
-def cmd(command):
-    """
-    Helper for running shell commands with subprocess(). Returns:
-    (stdout, stderr)
-    """
-    process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-    return process.communicate()
+class Client:
+    conf = {}
 
-def check_redis_alerts_disabled(message):
-    """
-    Check redis to see if alerts are disabled for this host - times out after 2 seconds,
-    to not block on an unreachable redis server.
-    """
-    conf = REDIS_CONFIG
+    def __init__(self, page=False, email=False, url=False, riemann=False):
+        Client.conf['page'] = page
+        Client.conf['email'] = email
+        Client.conf['url'] = url
+        Client.conf['riemann'] = riemann
+        Client.conf['redis_config'] = None
+        Client.conf['datastore'] = 'file'
+        Client.conf['state_dir'] = '/tmp'
 
-    # key: host, value: list of plugins that are disabled (or '*' for all)
-    conn = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'], socket_timeout=2)
+    def failure(self, string, page=None, email=None, url=None, riemann=None):
+        if page is None: page = Client.conf.get('page')
+        if email is None: email = Client.conf.get('email')
+        if url is None: url = Client.conf.get('url')
 
-    if not conn:
-        return False
-    else:
-        global_acks = conn.get('global')
-        if global_acks and ('*' in global_acks or message['plugin'] in global_acks):
+        # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
+        if riemann is None or riemann is True:
+            riemann = Client.conf.get('riemann')
+
+        return Dispatch_alert('failure', string, page, email, url, riemann)
+
+    def warning(self, string, page=None, email=None, url=None, riemann=None):
+        if page is None: page = Client.conf.get('page')
+        if email is None: email = Client.conf.get('email')
+        if url is None: url = Client.conf.get('url')
+
+        # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
+        if riemann is None or riemann is True:
+            riemann = Client.conf.get('riemann')
+
+
+        return Dispatch_alert('warning', string, page, email, url, riemann)
+
+    def ok(self, string, page=None, email=None, url=None, riemann=None):
+        if page is None: page = Client.conf.get('page')
+        if email is None: email = Client.conf.get('email')
+        if url is None: url = Client.conf.get('url')
+
+        # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
+        if riemann is None or riemann is True:
+            riemann = Client.conf.get('riemann')
+
+        return Dispatch_alert('okay', string, page, email, url, riemann)
+
+    def metric(self, path, value):
+        ''' formats and returns a collectd metric value (str) '''
+        return "PUTVAL %s/%s interval=%s N:%s" % (FQDN, path, INTERVAL, value)
+
+    def cmd(self, command):
+        """ Helper for running shell commands with subprocess().
+            Returns: (stdout, stderr)
+        """
+        process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        return process.communicate()
+
+    def configure_riemann(self, host, port):
+        self.riemann = { 'host': host, 'port': port, }
+
+    def set_redis_config(self, writer_host, reader_host, writer_port, reader_port, password, db='db0'):
+        self.redis_config = { 'writer': writer_host,
+                              'reader': reader_host,
+                              'writer_port': writer_port,
+                              'reader_port': reader_port,
+                              'passwd': password,
+                              'db': db,
+                            }
+        self.datastore = 'redis'
+
+    def set_state_dir(self, dir):
+        self.state_dir = dir
+
+
+class Check_redis_alerts_disabled(Client):
+    def __init__(self, message):
+        """
+        Check redis to see if alerts are disabled for this host - times out after 2 seconds,
+        to not block on an unreachable redis server.
+        """
+        conf = Client.get('redis_config')
+
+        # key: host, value: list of plugins that are disabled (or '*' for all)
+        conn = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'], socket_timeout=2)
+
+        if not conn:
+            return False
+        else:
+            global_acks = conn.get('global')
+            if global_acks and ('*' in global_acks or message['plugin'] in global_acks):
+                return True
+            else:
+                result = conn.get(message['host'])
+
+        if result and ('*' in result or message['plugin'] in result):
             return True
         else:
-            result = conn.get(message['host'])
+            return False
 
-    if result and ('*' in result or message['plugin'] in result):
-        return True
-    else:
-        return False
 
-def dispatch_alert(severity, message, page, email, url, riemann):
-    """
-    dispatch_alertes alerts based on params, and keep state, etc...
-    """
+class Dispatch_alert(Client):
+    def __init__(self, severity, message, page, email, url, riemann):
+        """
+        dispatch_alertes alerts based on params, and keep state, etc...
+        """
 
-    message = json.loads('{"host": "%s", "plugin": "%s", "severity": "%s", "message": "%s"}' % (FQDN.split('.')[0], CALLER, severity, message))
+        conf = Client.conf
 
-    # check if notifications for this host are disabled, and bail if so
-    if DATASTORE and 'redis' in DATASTORE:
-        if 'REDIS_CONFIG' not in globals():
-            logging.error("must call redis_config(), first")
-        elif check_redis_alerts_disabled(message):
-            logging.info("alerting disabled, supressing alert for: %s, %s" % (message['host'], message['plugin']))
+        message = json.loads('{"host": "%s", "plugin": "%s", "severity": "%s", "message": "%s"}' % (FQDN.split('.')[0], CALLER, severity, message))
+
+        # check if notifications for this host are disabled, and bail if so
+        if conf['datastore'] and 'redis' in conf['datastore']:
+            if redis_config not in conf:
+                logging.error("must call redis_config(), first")
+            elif Check_redis_alerts_disabled(message):
+                logging.info("alerting disabled, supressing alert for: %s, %s" % (message['host'], message['plugin']))
+                return None
+
+        # get last_state:
+        state = 'new'
+        state_file = conf['state_dir'] + "/%s" % message['plugin']
+
+        if not os.path.exists(conf['state_dir']) or not os.access(conf['state_dir'], os.W_OK):
+            logging.error("state_dir: no such file or directory, or unwritable")
             return None
 
-    if 'STATE_DIR' not in globals():
-        set_state_dir()
+        if os.path.exists(state_file):
+            if not os.access(state_file, os.W_OK):
+                # try to chown it? hehe
+                cmd("sudo chown %s %s" % (os.getenv('USER'), state_file))
 
-    # get last_state:
-    state = 'new'
-    state_file = STATE_DIR + "/%s" % message['plugin']
-
-    if not os.path.exists(STATE_DIR) or not os.access(STATE_DIR, os.W_OK):
-        logging.error("state_dir: no such file or directory, or unwritable")
-        return None
-
-    if os.path.exists(state_file):
-        if not os.access(state_file, os.W_OK):
-            # try to chown it? hehe
-            cmd("sudo chown %s %s" % (os.getenv('USER'), state_file))
-
-        with open(state_file, 'r') as fh:
-            prev_state = fh.readline()
-        if prev_state not in message['severity']:
-            # doesn't match? the state changed.
-            state = 'transitioned'
-    else:
-        # state file didn't exist - first-run of this check, don't alert unless it's not 'ok'
-        if 'ok' not in message['severity']:
-            state = 'transitioned'
+            with open(state_file, 'r') as fh:
+                prev_state = fh.readline()
+            if prev_state not in message['severity']:
+                # doesn't match? the state changed.
+                state = 'transitioned'
         else:
-            state = 'new'
+            # state file didn't exist - first-run of this check, don't alert unless it's not 'ok'
+            if 'ok' not in message['severity']:
+                state = 'transitioned'
+            else:
+                state = 'new'
 
-    # write the current state:
-    with open(state_file, 'w') as fh:
-        fh.write(message['severity'])
+        # write the current state:
+        with open(state_file, 'w') as fh:
+            fh.write(message['severity'])
 
-    # if paging was requested, do it, unless the state is the same as last time
-    if page and 'transitioned' in state:
-        if 'PD_KEY' not in globals():
-            logging.error("must call set_pagerduty_key(), first")
-        else:
-            send_to_pagerduty(PD_KEY, message)
+        # if paging was requested, do it, unless the state is the same as last time
+        if page and 'transitioned' in state:
+            if 'PD_KEY' not in globals():
+                logging.error("must call set_pagerduty_key(), first")
+            else:
+                send_to_pagerduty(PD_KEY, message)
 
-    # only email if state is new since last time
-    if email and 'transitioned' in state:
-        send_to_email(email, message)
+        # only email if state is new since last time
+        if email and 'transitioned' in state:
+            send_to_email(email, message)
 
-    # if 'url' was requested, always post to it regardless of state
-    if url:
-        post_to_url(message, url)
+        # if 'url' was requested, always post to it regardless of state
+        if url:
+            post_to_url(message, url)
 
-    # if 'riemann' was requested, always send the event to riemann
-    if riemann:
-        riemann = bernhard.Client(host=RIEMANN_CONFIG.get('host'), port=RIEMANN_CONFIG.get('port'))
-        riemann.send({ 'host': message['host'],
-                       'service': message['plugin'],
-                       'state': message['severity'],
-                       'description': message['message'],
-                     })
-
-def failure(string, page=False, email=False, url=False, riemann=False):
-    return dispatch_alert('failure', string, page, email, url, riemann)
-
-def warning(string, page=False, email=False, url=False, riemann=False):
-    return dispatch_alert('warning', string, page, email, url, riemann)
-
-def ok(string, page=False, email=False, url=False, riemann=False):
-    return dispatch_alert('okay', string, page, email, url, riemann)
-
-def metric(path, value):
-    ''' formats and returns a collectd metric value (str) '''
-    return "PUTVAL %s/%s interval=%s N:%s" % (FQDN, path, INTERVAL, value)
-
+        # if 'riemann' was requested, always send the event to riemann
+        if riemann:
+            if 'host' not in riemann:
+                logging.error("must call riemann_config(), first")
+            riemann = bernhard.Client(host=riemann.get('host'), port=riemann.get('port'))
+            riemann.send({ 'host': message['host'],
+                           'service': message['plugin'],
+                           'state': message['severity'],
+                           'description': message['message'],
+                         })
 
