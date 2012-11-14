@@ -79,6 +79,7 @@ try:
 except ImportError:
     import json
 
+# if these imports fail, using those components won't work, but they aren't required deps:
 try:
     import redis
 except ImportError:
@@ -89,138 +90,64 @@ try:
 except ImportError:
     pass
 
-FQDN = os.environ.get('COLLECTD_HOSTNAME', socket.gethostname())
-INTERVAL = os.environ.get('COLLECTD_INTERVAL', "60")
-#CALLER = os.path.basename(inspect.stack()[-1][1])
-CALLER = os.path.basename(sys.argv[0])
-TIME = int(time.mktime(time.gmtime()))
-
-def set_pagerduty_key(key):
-    global PD_KEY
-    PD_KEY = key
-
-def send_to_socket(message, host, port):
-    """
-    Sends message to host/port via tcp
-    """
-    sock = socket.socket()
-
-    sock.connect((host, int(port)))
-    sock.sendall(message)
-    sock.close()
-
-def post_to_url(message, url):
-    """
-    HTTP POSTs message to url
-    """
-    req = urllib2.Request(url, json.dumps(message), {'Content-Type': 'application/json'})
-    f = urllib2.urlopen(req)
-    resp = f.read()
-    f.close()
-
-    return resp
-
-def set_pagerduty_store(kind='file', config='/tmp/incident_keys'):
-    """
-    sets PD storage method, and stores a variable to indicate this has been done
-    """
-    global PD_STORAGE_CONFIGURED
-    if pagerduty.set_datastore(kind, config):
-        PD_STORAGE_CONFIGURED = True
-
-def send_to_pagerduty(key, message):
-    """
-    Sends alert to pager duty - you must call authenticate() first
-    """
-    # if not already done, call config function to set defaults
-    if 'PD_STORAGE_CONFIGURED' not in globals():
-        if 'REDIS_CONFIG' in globals():
-            set_pagerduty_store('redis', REDIS_CONFIG)
-        else:
-            if 'STATE_DIR' in globals():
-                set_pagerduty_store('file', STATE_DIR.lstrip('/') + "/incident_keys")
-
-    pagerduty.authenticate(key)
-
-    send_string = "%s %s: %s %s" % (message['host'], message['plugin'], message['severity'].upper(), message['message'])
-
-    if 'okay' in message['severity']:
-        pagerduty.event('resolve', send_string)
-
-    elif 'failure' or 'warning' in message['serverity']:
-        pagerduty.event('trigger', send_string)
-
-def send_to_email(address, message):
-    """
-    Sends alert via email
-    """
-    print "emailing: ", address
-
-    alert_subject = "%s %s: %s" % (message['host'], message['plugin'], message['message'])
-
-    me = 'collectd@krux.com'
-    you = str(address)
-
-    msg = MIMEMultipart()
-    msg['Subject'] = '[collectd] %s %s' % (message['severity'].upper(), alert_subject)
-    msg['From'] = me
-    msg['To'] = you
-    body = MIMEText(str(message))
-    msg.attach(body)
-
-    s = smtplib.SMTP('localhost')
-    s.sendmail(me, [you], msg.as_string())
-    s.quit()
-
 class Client:
-    conf = {}
 
     def __init__(self, page=False, email=False, url=False, riemann=False):
-        Client.conf['page'] = page
-        Client.conf['email'] = email
-        Client.conf['url'] = url
-        Client.conf['riemann'] = riemann
-        Client.conf['redis_config'] = None
-        Client.conf['datastore'] = 'file'
-        Client.conf['state_dir'] = '/tmp'
+        self.page = page
+        self.email = email
+        self.url = url
+        self.riemann = riemann
+        self.redis_config = None
+        self.datastore = 'file'
+        self.pagerduty_configured = None
+        self.pagerduty_key = None
+        self.fqdn = os.environ.get('COLLECTD_HOSTNAME', socket.gethostname())
+        self.interval = os.environ.get('COLLECTD_INTERVAL', "60")
+        #CALLER = os.path.basename(inspect.stack()[-1][1])
+        self.caller = os.path.basename(sys.argv[0])
+        self.time = int(time.mktime(time.gmtime()))
+        self.state_dir = '/tmp'
+        self.state_file = self.state_dir + "/%s" % self.caller
+        self.cur_state = None
+        self.alert_message = None
+
 
     def failure(self, string, page=None, email=None, url=None, riemann=None):
-        if page is None: page = Client.conf.get('page')
-        if email is None: email = Client.conf.get('email')
-        if url is None: url = Client.conf.get('url')
+        if page is None: page = self.page
+        if email is None: email = self.email
+        if url is None: url = self.url
 
         # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
         if riemann is None or riemann is True:
-            riemann = Client.conf.get('riemann')
+            riemann = self.riemann
 
-        return Dispatch_alert('failure', string, page, email, url, riemann)
+        self.dispatch_alert('failure', string, page, email, url, riemann)
 
     def warning(self, string, page=None, email=None, url=None, riemann=None):
-        if page is None: page = Client.conf.get('page')
-        if email is None: email = Client.conf.get('email')
-        if url is None: url = Client.conf.get('url')
+        if page is None: page = self.page
+        if email is None: email = self.email
+        if url is None: url = self.url
 
         # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
         if riemann is None or riemann is True:
-            riemann = Client.conf.get('riemann')
+            riemann = self.riemann
 
-
-        return Dispatch_alert('warning', string, page, email, url, riemann)
+        self.dispatch_alert('warning', string, page, email, url, riemann)
 
     def ok(self, string, page=None, email=None, url=None, riemann=None):
-        if page is None: page = Client.conf.get('page')
-        if email is None: email = Client.conf.get('email')
-        if url is None: url = Client.conf.get('url')
+        if page is None: page = self.page
+        if email is None: email = self.email
+        if url is None: url = self.url
 
         # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
         if riemann is None or riemann is True:
-            riemann = Client.conf.get('riemann')
+            riemann = self.riemann
 
-        return Dispatch_alert('okay', string, page, email, url, riemann)
+        self.dispatch_alert('okay', string, page, email, url, riemann)
 
     def metric(self, path, value):
         ''' formats and returns a collectd metric value (str) '''
-        return "PUTVAL %s/%s interval=%s N:%s" % (FQDN, path, INTERVAL, value)
+        return "PUTVAL %s/%s interval=%s N:%s" % (self.fqdn, path, self.interval, value)
 
     def cmd(self, command):
         """ Helper for running shell commands with subprocess().
@@ -229,7 +156,17 @@ class Client:
         process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         return process.communicate()
 
+    def set_pagerduty_store(self, kind='file', config='/tmp/incident_keys'):
+        """
+        sets PD storage method, and stores a variable to indicate this has been done
+        """
+        if pagerduty.set_datastore(kind, config):
+            self.pagerduty_configured = True
+
     def configure_riemann(self, host, port):
+        """
+        configures host, port for sending events to riemann.
+        """
         self.riemann = { 'host': host, 'port': port, }
 
     def set_redis_config(self, writer_host, reader_host, writer_port, reader_port, password, db='db0'):
@@ -246,13 +183,12 @@ class Client:
         self.state_dir = dir
 
 
-class Check_redis_alerts_disabled(Client):
-    def __init__(self, message):
+    def check_redis_alerts_disabled(self, message):
         """
         Check redis to see if alerts are disabled for this host - times out after 2 seconds,
         to not block on an unreachable redis server.
         """
-        conf = Client.get('redis_config')
+        conf = self.redis_config
 
         # key: host, value: list of plugins that are disabled (or '*' for all)
         conn = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'], socket_timeout=2)
@@ -271,77 +207,163 @@ class Check_redis_alerts_disabled(Client):
         else:
             return False
 
+    def get_current_state(self):
 
-class Dispatch_alert(Client):
-    def __init__(self, severity, message, page, email, url, riemann):
+        if not os.path.exists(self.state_file):
+            return "new"
+
+        with open(self.state_file, 'r') as fh:
+            return fh.readline()
+
+    def dispatch_alert(self, severity, message, page, email, url, riemann):
         """
         dispatch_alertes alerts based on params, and keep state, etc...
         """
 
-        conf = Client.conf
+        message = json.loads('{"host": "%s", "plugin": "%s", "severity": "%s", "message": "%s"}' % (self.fqdn.split('.')[0], self.caller, severity, message))
 
-        message = json.loads('{"host": "%s", "plugin": "%s", "severity": "%s", "message": "%s"}' % (FQDN.split('.')[0], CALLER, severity, message))
+        # track this, to make it available to external users of the lib.
+        # e.g. they may want to call send_to_pagerduty() directly if RiemannError is raised.
+        self.alert_message = message
 
         # check if notifications for this host are disabled, and bail if so
-        if conf['datastore'] and 'redis' in conf['datastore']:
-            if redis_config not in conf:
+        if self.datastore and 'redis' in self.datastore:
+            if not self.redis_config:
                 logging.error("must call redis_config(), first")
-            elif Check_redis_alerts_disabled(message):
+            elif self.check_redis_alerts_disabled(message):
                 logging.info("alerting disabled, supressing alert for: %s, %s" % (message['host'], message['plugin']))
                 return None
 
         # get last_state:
-        state = 'new'
-        state_file = conf['state_dir'] + "/%s" % message['plugin']
+        state = self.get_current_state()
 
-        if not os.path.exists(conf['state_dir']) or not os.access(conf['state_dir'], os.W_OK):
-            logging.error("state_dir: no such file or directory, or unwritable")
-            return None
+        if severity not in state:
+            # doesn't match? the state changed or we can't open the state file.
+            state = 'transitioned'
 
-        if os.path.exists(state_file):
-            if not os.access(state_file, os.W_OK):
-                # try to chown it? hehe
-                cmd("sudo chown %s %s" % (os.getenv('USER'), state_file))
-
-            with open(state_file, 'r') as fh:
-                prev_state = fh.readline()
-            if prev_state not in message['severity']:
-                # doesn't match? the state changed.
-                state = 'transitioned'
-        else:
-            # state file didn't exist - first-run of this check, don't alert unless it's not 'ok'
+        if state is None or 'new' in state:
+            # state file didn't exist - first-run of this check, so don't alert if it's 'ok'
             if 'ok' not in message['severity']:
                 state = 'transitioned'
             else:
                 state = 'new'
 
+        # make available externally
+        self.cur_state = state
+
         # write the current state:
-        with open(state_file, 'w') as fh:
+        with open(self.state_file, 'w') as fh:
             fh.write(message['severity'])
 
         # if paging was requested, do it, unless the state is the same as last time
         if page and 'transitioned' in state:
-            if 'PD_KEY' not in globals():
+            if not self.pagerduty_key:
                 logging.error("must call set_pagerduty_key(), first")
             else:
-                send_to_pagerduty(PD_KEY, message)
+                self.send_to_pagerduty(message)
 
         # only email if state is new since last time
         if email and 'transitioned' in state:
-            send_to_email(email, message)
+            self._send_to_email(email, message)
 
         # if 'url' was requested, always post to it regardless of state
         if url:
-            post_to_url(message, url)
+            self._post_to_url(message, url)
 
         # if 'riemann' was requested, always send the event to riemann
+        #
         if riemann:
-            if 'host' not in riemann:
-                logging.error("must call riemann_config(), first")
+                self._send_to_riemann(riemann, message)
+
+
+    def set_pagerduty_key(self, key):
+        self.pagerduty_key = key
+
+    def _send_to_riemann(self, riemann, message):
+        if 'host' not in riemann or 'port' not in riemann:
+            raise RiemannError("must call riemann_config() first")
+        try:
             riemann = bernhard.Client(host=riemann.get('host'), port=riemann.get('port'))
             riemann.send({ 'host': message['host'],
                            'service': message['plugin'],
                            'state': message['severity'],
                            'description': message['message'],
                          })
+        except:
+            e = sys.exc_info()[0]
+            raise RiemannError(str(e) + str(message))
+
+
+    def send_to_pagerduty(self, message, key=None):
+        """
+        Sends alert to pager duty - you must call authenticate() first
+        """
+        # if not already done, call config function to set defaults
+        if not self.pagerduty_configured:
+            if self.redis_config:
+                self.set_pagerduty_store('redis', self.redis_config)
+            elif self.state_dir:
+                self.set_pagerduty_store('file', self.state_dir.rstrip('/') + "/incident_keys")
+
+        # if we called this with a key=, we're wanting to use a different API key for this send.
+        if key is not None:
+            pagerduty.authenticate(key)
+        else:
+            pagerduty.authenticate(self.pagerduty_key)
+
+        send_string = "%s %s: %s %s" % (message['host'], message['plugin'], message['severity'].upper(), message['message'])
+
+        if 'okay' in message['severity']:
+            pagerduty.event('resolve', send_string)
+
+        elif 'failure' or 'warning' in message['serverity']:
+            pagerduty.event('trigger', send_string)
+
+    def _send_to_socket(self, message, host, port):
+        """
+        Sends message to host/port via tcp
+        """
+        sock = socket.socket()
+
+        sock.connect((host, int(port)))
+        sock.sendall(message)
+        sock.close()
+
+    def _post_to_url(self, message, url):
+        """
+        HTTP POSTs message to url
+        """
+        req = urllib2.Request(url, json.dumps(message), {'Content-Type': 'application/json'})
+        f = urllib2.urlopen(req)
+        resp = f.read()
+        f.close()
+
+        return resp
+
+    def _send_to_email(self, address, message):
+        """
+        Sends alert via email
+        """
+        print "emailing: ", address
+
+        alert_subject = "%s %s: %s" % (message['host'], message['plugin'], message['message'])
+
+        me = 'collectd@krux.com'
+        you = str(address)
+
+        msg = MIMEMultipart()
+        msg['Subject'] = '[collectd] %s %s' % (message['severity'].upper(), alert_subject)
+        msg['From'] = me
+        msg['To'] = you
+        body = MIMEText(str(message))
+        msg.attach(body)
+
+        s = smtplib.SMTP('localhost')
+        s.sendmail(me, [you], msg.as_string())
+        s.quit()
+
+class RiemannError(Exception):
+
+    def __str__(self):
+        return self.message
 
