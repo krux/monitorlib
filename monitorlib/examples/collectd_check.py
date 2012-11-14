@@ -16,14 +16,15 @@ if __name__ == '__main__':
     # fake a check, that outputs True/False:
     check_value = True
 
-    # enable datastore checking (for host alerts being disabled, also uses redis to store
-    # pagerduty state info):
-    # collectd.set_redis_config('write-host', 'read-host', 6379, 6379, 'password', 'db0')
-
-    # enable pagerduty:
-    collectd.set_pagerduty_key('key....')
 
     cd = collectd.Client()
+
+    # enable pagerduty:
+    cd.set_pagerduty_key('key....')
+
+    # enable datastore checking (for host alerts being disabled, also uses redis to store
+    # pagerduty state info):
+    # cd.set_redis_config('write-host', 'read-host', 6379, 6379, 'password', 'db0')
 
     #print cd.cmd("ls /")
     cd.configure_riemann('localhost', 5555)
