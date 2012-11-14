@@ -273,13 +273,22 @@ class Client:
         # if 'riemann' was requested, always send the event to riemann
         #
         if riemann:
-                self._send_to_riemann(riemann, message)
+            if page and 'transitioned' in state:
+                # tell riemann we want paging regardless of its rules:
+                tags = [ "paging_required" ]
+            else:
+                tags = []
+
+            self._send_to_riemann(riemann, message, tags)
 
 
     def set_pagerduty_key(self, key):
         self.pagerduty_key = key
 
-    def _send_to_riemann(self, riemann, message):
+    def _send_to_riemann(self, riemann, message, tags):
+        """
+        Sends the event to riemann, raises RiemannError if it doesn't work.
+        """
         if 'host' not in riemann or 'port' not in riemann:
             raise RiemannError("must call riemann_config() first")
         try:
@@ -288,6 +297,7 @@ class Client:
                            'service': message['plugin'],
                            'state': message['severity'],
                            'description': message['message'],
+                           'tags': tags,
                          })
         except:
             e = sys.exc_info()[0]
