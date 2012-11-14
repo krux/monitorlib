@@ -4,7 +4,7 @@
 """
  Library to make outputting notifications and values in collectd plugins easier.
  Handles notifications itself; supports email, pagerduty, arbitrary URL to POST
- JSON to (or even raw TCP sending of JSON).
+ JSON to (or even raw TCP sending of JSON), and sending events to riemann.
 
  = Usage:
  See: examples/collectd_check.py
@@ -12,10 +12,13 @@
  Within your own collectd plugin, simply:
  import monitorlib.collectd as collectd
 
- Then, you can use collectd.[warning|ok|failure]("message content", [options]).
+ Create an object:
+ cd = collectd.Client()
+
+ Then, you can use cd.[warning|ok|failure]("message content", [options]).
 
  likewise, you can use it to output values:
- collectd.metric("plugin-instance/type-instance", value)
+ cd.metric("plugin-instance/type-instance", value)
 
  = Interface docs:
 
@@ -55,9 +58,8 @@
   You can use this to send to pagerduty or elsewhere directly through your service
   check plugins. But, that's old-school nagios style.
   Ideally, you'll simply wrap this library to set the defaults to False for everything
-  but the URL argument, which will cause this lib to POST JSON every time the check
-  runs. This should go to a decision engine (like riemann), where you
-  can verify the state of other checks (LB status, cluster health, parent relationships,
+  but riemann. This will send all events to riemann.
+  In riemann, you can verify the state of other checks (LB status, cluster health, parent relationships,
   etc) before alerting (or even displaying a status) for real.
 
 """

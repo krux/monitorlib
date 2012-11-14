@@ -24,4 +24,4 @@ example, have warning messages only email, and failure/ok messages page.
 Also includes pagerduty integration, with support for storing the incident_key
 returned by pagerduty in redis (or flat files), to avoid duplicate alerts.
 
-NEW: support sending all events to riemann.
+NEW: support for sending all events to riemann.
