@@ -183,6 +183,7 @@ class Client:
 
     def set_state_dir(self, dir):
         self.state_dir = dir
+        self.state_file = dir + "/%s" % self.caller
 
 
     def check_redis_alerts_disabled(self, message):
@@ -210,6 +211,9 @@ class Client:
             return False
 
     def get_current_state(self):
+        """
+        Returns "new" if it can't open the state_file. Otherwise, returns the text in the file.
+        """
 
         if not os.path.exists(self.state_file):
             return "new"
