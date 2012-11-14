@@ -99,6 +99,7 @@ class Client:
         self.email = email
         self.url = url
         self.riemann = riemann
+        self.riemann_tags = []
         self.redis_config = None
         self.datastore = 'file'
         self.pagerduty_configured = None
@@ -278,19 +279,19 @@ class Client:
         # if 'riemann' was requested, always send the event to riemann
         #
         if riemann:
-            if page and 'transitioned' in state:
-                # tell riemann we want paging regardless of its rules:
-                tags = [ "paging_required" ]
-            else:
-                tags = []
-
-            self._send_to_riemann(riemann, message, tags)
+            self._send_to_riemann(riemann, message)
 
 
     def set_pagerduty_key(self, key):
         self.pagerduty_key = key
 
-    def _send_to_riemann(self, riemann, message, tags):
+    def riemann_tag(self, string):
+        """
+        Adds a string to the rimann_tags list.
+        """
+        self.riemann_tags.append(string)
+
+    def _send_to_riemann(self, riemann, message):
         """
         Sends the event to riemann, raises RiemannError if it doesn't work.
         """
@@ -302,7 +303,7 @@ class Client:
                            'service': message['plugin'],
                            'state': message['severity'],
                            'description': message['message'],
-                           'tags': tags,
+                           'tags': self.riemann_tags,
                          })
         except:
             e = sys.exc_info()[0]
