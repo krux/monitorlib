@@ -311,7 +311,7 @@ class Client:
         else:
             pagerduty.authenticate(self.pagerduty_key)
 
-        send_string = "%s %s: %s %s" % (message['host'], message['plugin'], message['severity'].upper(), message['message'])
+        send_string = "%s: %s %s: %s" % (message['severity'].upper(), message['host'], message['plugin'], message['message'])
 
         if 'okay' in message['severity']:
             pagerduty.event('resolve', send_string)
