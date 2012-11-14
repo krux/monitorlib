@@ -154,8 +154,6 @@ def event(event_type, desc, details=None):
 
     message = construct(PD_KEY, event_type, desc, storage_key, details)
 
-    print message
-
     # if this is an OKAY message, don't send to PD unless we have an incident key:
     if 'resolve' in event_type and message['incident_key']:
         resp = json.loads(send_to_pagerduty(message))
@@ -168,11 +166,9 @@ def event(event_type, desc, details=None):
     # Response from PD: {"status":"success","message":"Event processed","incident_key":"74c804e0a92c012fdea322000af842a7"}
     if 'resolve' in event_type:
         # don't care what the response was - just make sure to remove it from KEY_STORAGE
-        print "deleting " + storage_key
         del_incident_key(storage_key)
     else:
         # store the incident_key returned by pagerduty
-        print "adding " + storage_key
         add_incident_key(storage_key, resp['incident_key'])
 
 
