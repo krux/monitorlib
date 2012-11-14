@@ -146,9 +146,12 @@ def send_to_pagerduty(message):
 def event(event_type, desc, details=None):
     """
     Entry point interface to create a PD event.
+    Expects 'desc' to be of the form:
+    "severity: host script_name: error_message", i.e.:
+    "WARNING: hostname service_check.py: apache failed"
     """
     # the host & script name from the alert message:
-    host_script = desc.split(':')[0]
+    host_script = desc.split(':')[1]
     # store the API key as part of the thing to key off of when storing incident_keys, to support multiple API keys at once.
     storage_key = PD_KEY + '^' + host_script
 
