@@ -149,10 +149,14 @@ def event(event_type, desc, details=None):
     """
     # the host & script name from the alert message:
     host_script = desc.split(':')[0]
+    # store the API key as part of the thing to key off of when storing incident_keys, to support multiple API keys at once.
+    storage_key = PD_KEY + '^' + host_script
 
-    message = construct(PD_KEY, event_type, desc, host_script, details)
+    message = construct(PD_KEY, event_type, desc, storage_key, details)
 
-    # is this is an OKAY message, don't send to PD unless we have an incident key:
+    print message
+
+    # if this is an OKAY message, don't send to PD unless we have an incident key:
     if 'resolve' in event_type and message['incident_key']:
         resp = json.loads(send_to_pagerduty(message))
     elif 'trigger' in event_type:
@@ -164,10 +168,12 @@ def event(event_type, desc, details=None):
     # Response from PD: {"status":"success","message":"Event processed","incident_key":"74c804e0a92c012fdea322000af842a7"}
     if 'resolve' in event_type:
         # don't care what the response was - just make sure to remove it from KEY_STORAGE
-        del_incident_key(host_script)
+        print "deleting " + storage_key
+        del_incident_key(storage_key)
     else:
         # store the incident_key returned by pagerduty
-        add_incident_key(host_script, resp['incident_key'])
+        print "adding " + storage_key
+        add_incident_key(storage_key, resp['incident_key'])
 
 
 
