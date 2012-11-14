@@ -243,16 +243,15 @@ class Client:
         # get last_state:
         state = self.get_current_state()
 
-        if severity not in state:
-            # doesn't match? the state changed or we can't open the state file.
-            state = 'transitioned'
-
         if state is None or 'new' in state:
             # state file didn't exist - first-run of this check, so don't alert if it's 'ok'
             if 'ok' not in message['severity']:
                 state = 'transitioned'
             else:
                 state = 'new'
+        elif severity not in state:
+            # doesn't match? the state changed or we can't open the state file.
+            state = 'transitioned'
 
         # make available externally
         self.cur_state = state
