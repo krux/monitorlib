@@ -50,8 +50,8 @@
   metric: string of collectd metric (excluding host, it's added automatically) -
           make sure it's formatted as collectd expects, or it'll be dropped!
           (make sure last item is in /usr/share/collectd/types.db, to start)
-          Krux-specific: always use the counter type, and it'll be removed by graphite.
-          To get stats.$env.ops.collectd.$host.plugin.instance.foo, use "plugin-instance/counter-foo".
+          Krux-specific: always use the gauge type, and it'll be removed by graphite. Counters are derived.
+          To get stats.$env.ops.collectd.$host.plugin.instance.foo, use "plugin-instance/gauge-foo".
   value: integer value
 
  = Thoughts:
