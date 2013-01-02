@@ -365,17 +365,19 @@ class Client:
         alert_subject = "%s %s: %s" % (message['host'], message['plugin'], message['message'])
 
         me = 'collectd@krux.com'
-        you = str(address)
+        you = [address.lstrip().rstrip() for address in address.split(',')]
 
         msg = MIMEMultipart()
         msg['Subject'] = '[collectd] %s %s' % (message['severity'].upper(), alert_subject)
         msg['From'] = me
-        msg['To'] = you
+        # To: header must be a string, and there must be a whitespace after the comma.
+        msg['To'] = ", ".join(you)
         body = MIMEText(str(message))
         msg.attach(body)
 
         s = smtplib.SMTP('localhost')
-        s.sendmail(me, [you], msg.as_string())
+        # the call to sendmail, needs 'you' to be a list:
+        s.sendmail(me, you, msg.as_string())
         s.quit()
 
 class RiemannError(Exception):
