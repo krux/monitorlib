@@ -365,7 +365,7 @@ class Client:
         alert_subject = "%s %s: %s" % (message['host'], message['plugin'], message['message'])
 
         me = 'collectd@krux.com'
-        you = [address.lstrip().rstrip() for address in you.split(',')]
+        you = [address.lstrip().rstrip() for address in address.split(',')]
 
         msg = MIMEMultipart()
         msg['Subject'] = '[collectd] %s %s' % (message['severity'].upper(), alert_subject)
