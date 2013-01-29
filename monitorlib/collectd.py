@@ -227,7 +227,7 @@ class Client:
         dispatch_alertes alerts based on params, and keep state, etc...
         """
 
-        message = json.loads('{"host": "%s", "plugin": "%s", "severity": "%s", "message": "%s"}' % (self.fqdn.split('.')[0], self.caller, severity, message))
+        message = {"host": self.fqdn.split('.')[0], "plugin": self.caller, "severity": severity, "message": message}
 
         # track this, to make it available to external users of the lib.
         # e.g. they may want to call send_to_pagerduty() directly if RiemannError is raised.
