@@ -92,9 +92,10 @@ try:
 except ImportError:
     pass
 
+
 class Client:
 
-    def __init__(self, page=False, email=False, url=False, riemann=False):
+    def __init__(self, page=False, email=False, url=False, riemann=False, disable_alerts=False):
         self.page = page
         self.email = email
         self.url = url
@@ -106,19 +107,22 @@ class Client:
         self.pagerduty_key = None
         self.fqdn = os.environ.get('COLLECTD_HOSTNAME', socket.gethostname())
         self.interval = os.environ.get('COLLECTD_INTERVAL', "60")
-        #CALLER = os.path.basename(inspect.stack()[-1][1])
+        # CALLER = os.path.basename(inspect.stack()[-1][1])
         self.caller = os.path.basename(sys.argv[0])
         self.time = int(time.mktime(time.gmtime()))
         self.state_dir = '/tmp'
         self.state_file = self.state_dir + "/%s" % self.caller
         self.cur_state = None
         self.alert_message = None
-
+        self.no_alerts = disable_alerts
 
     def failure(self, string, page=None, email=None, url=None, riemann=None):
-        if page is None: page = self.page
-        if email is None: email = self.email
-        if url is None: url = self.url
+        if page is None:
+            page = self.page
+        if email is None:
+            email = self.email
+        if url is None:
+            url = self.url
 
         # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
         if riemann is None or riemann is True:
@@ -127,9 +131,12 @@ class Client:
         self.dispatch_alert('failure', string, page, email, url, riemann)
 
     def warning(self, string, page=None, email=None, url=None, riemann=None):
-        if page is None: page = self.page
-        if email is None: email = self.email
-        if url is None: url = self.url
+        if page is None:
+            page = self.page
+        if email is None:
+            email = self.email
+        if url is None:
+            url = self.url
 
         # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
         if riemann is None or riemann is True:
@@ -138,9 +145,12 @@ class Client:
         self.dispatch_alert('warning', string, page, email, url, riemann)
 
     def ok(self, string, page=None, email=None, url=None, riemann=None):
-        if page is None: page = self.page
-        if email is None: email = self.email
-        if url is None: url = self.url
+        if page is None:
+            page = self.page
+        if email is None:
+            email = self.email
+        if url is None:
+            url = self.url
 
         # we store data (the conf) in self.riemann. If it's not passed as an arg, use self.riemann.
         if riemann is None or riemann is True:
@@ -170,22 +180,24 @@ class Client:
         """
         configures host, port for sending events to riemann.
         """
-        self.riemann = { 'host': host, 'port': port, }
+        self.riemann = {'host': host, 'port': port, }
 
     def set_redis_config(self, writer_host, reader_host, writer_port, reader_port, password, db='db0'):
-        self.redis_config = { 'writer': writer_host,
-                              'reader': reader_host,
-                              'writer_port': writer_port,
-                              'reader_port': reader_port,
-                              'passwd': password,
-                              'db': db,
-                            }
+        self.redis_config = {'writer': writer_host,
+                             'reader': reader_host,
+                             'writer_port': writer_port,
+                             'reader_port': reader_port,
+                             'passwd': password,
+                             'db': db,
+                             }
         self.datastore = 'redis'
 
     def set_state_dir(self, dir):
         self.state_dir = dir
         self.state_file = dir + "/%s" % self.caller
 
+    def disable_alerts():
+        self.no_alerts = True
 
     def check_redis_alerts_disabled(self, message):
         """
@@ -262,14 +274,14 @@ class Client:
             fh.write(message['severity'])
 
         # if paging was requested, do it, unless the state is the same as last time
-        if page and 'transitioned' in state:
+        if page and 'transitioned' in state and not self.no_alerts:
             if not self.pagerduty_key:
                 logging.error("must call set_pagerduty_key(), first")
             else:
                 self.send_to_pagerduty(message)
 
         # only email if state is new since last time
-        if email and 'transitioned' in state:
+        if email and 'transitioned' in state and not self.no_alerts:
             self._send_to_email(email, message)
 
         # if 'url' was requested, always post to it regardless of state
@@ -280,7 +292,6 @@ class Client:
         #
         if riemann:
             self._send_to_riemann(riemann, message)
-
 
     def set_pagerduty_key(self, key):
         self.pagerduty_key = key
@@ -299,16 +310,15 @@ class Client:
             raise RiemannError("must call riemann_config() first")
         try:
             riemann = bernhard.Client(host=riemann.get('host'), port=riemann.get('port'))
-            riemann.send({ 'host': message['host'],
-                           'service': message['plugin'],
-                           'state': message['severity'],
-                           'description': message['message'],
-                           'tags': self.riemann_tags,
-                         })
+            riemann.send({'host': message['host'],
+                          'service': message['plugin'],
+                          'state': message['severity'],
+                          'description': message['message'],
+                          'tags': self.riemann_tags,
+                          })
         except:
             e = sys.exc_info()[0]
             raise RiemannError(str(e) + str(message))
-
 
     def send_to_pagerduty(self, message, key=None):
         """
@@ -380,8 +390,8 @@ class Client:
         s.sendmail(me, you, msg.as_string())
         s.quit()
 
+
 class RiemannError(Exception):
 
     def __str__(self):
         return self.message
-
