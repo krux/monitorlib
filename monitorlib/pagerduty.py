@@ -77,7 +77,10 @@ def get_incident_key(store_key):
 
     elif 'redis' in KEY_STORAGE:
         conn = redis_conn(STORAGE_CONFIG, 'read')
-        return conn.get(store_key)
+        try:
+            return conn.get(store_key)
+        except redis.exceptions.RedisError:
+            return None
 
 def del_incident_key(store_key):
     """
@@ -94,7 +97,10 @@ def del_incident_key(store_key):
 
     elif 'redis' in KEY_STORAGE:
         conn = redis_conn(STORAGE_CONFIG, 'write')
-        return conn.delete(store_key)
+        try:
+            return conn.delete(store_key)
+        except redis.exceptions.RedisError:
+            return None
 
 def add_incident_key(store_key, incident_key):
     """
@@ -116,7 +122,10 @@ def add_incident_key(store_key, incident_key):
 
     elif 'redis' in KEY_STORAGE:
         conn = redis_conn(STORAGE_CONFIG, 'write')
-        return conn.set(store_key, incident_key)
+        try:
+            return conn.set(store_key, incident_key)
+        except redis.exceptions.RedisError:
+            return None
 
 def construct(service_key, event_type, desc, store_key, details):
     """
@@ -166,13 +175,15 @@ def event(event_type, desc, details=None):
         # it was a 'resolve' and we didn't have the incident_key already (can't delete). done.
         return None
 
-    # Response from PD: {"status":"success","message":"Event processed","incident_key":"74c804e0a92c012fdea322000af842a7"}
-    if 'resolve' in event_type:
-        # don't care what the response was - just make sure to remove it from KEY_STORAGE
-        del_incident_key(storage_key)
-    else:
-        # store the incident_key returned by pagerduty
-        add_incident_key(storage_key, resp['incident_key'])
+    # if resp is None, connecting to redis may have failed.
+    if resp:
+        # Response from PD: {"status":"success","message":"Event processed","incident_key":"74c804e0a92c012fdea322000af842a7"}
+        if 'resolve' in event_type:
+            # don't care what the response was - just make sure to remove it from KEY_STORAGE
+            del_incident_key(storage_key)
+        else:
+            # store the incident_key returned by pagerduty
+            add_incident_key(storage_key, resp['incident_key'])
 
 
 
