@@ -63,7 +63,6 @@
   etc) before alerting (or even displaying a status) for real.
 
 """
-import time
 import socket
 import os
 import sys
@@ -72,8 +71,9 @@ import inspect
 import logging
 import urllib2
 import smtplib
+import time
+from time import gmtime, strftime
 from optparse import OptionParser
-import monitorlib.pagerduty as pagerduty
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 try:
@@ -92,6 +92,7 @@ try:
 except ImportError:
     pass
 
+import monitorlib.pagerduty as pagerduty
 
 class Client:
 
@@ -236,9 +237,10 @@ class Client:
 
     def dispatch_alert(self, severity, message, page, email, url, riemann):
         """
-        dispatch_alertes alerts based on params, and keep state, etc...
+        dispatch_alerts alerts based on params, and keep state, etc...
         """
 
+        now = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         message = {"host": self.fqdn.split('.')[0], "plugin": self.caller, "severity": severity, "message": message}
 
         # print the error, so when running plugins by hand we see the current state
@@ -258,24 +260,48 @@ class Client:
                 return None
 
         # get last_state:
-        state = self.get_current_state()
+        read_state = self.get_current_state()
+        try:
+            state = json.loads(read_state)
+        except ValueError as err:
+            # can't JSON decode it? May be old format, or had none existing. That's OK.
+            state = read_state
 
-        if state is None or 'new' in state:
+        if state is None or state is {} or state is '' or 'new' in state:
             # state file didn't exist - first-run of this check, so don't alert if it's 'ok'
             if 'ok' not in message['severity']:
                 state = 'transitioned'
             else:
                 state = 'new'
-        elif severity not in state:
-            # doesn't match? the state changed or we can't open the state file.
+
+            message['time'] = now
+
+        # so, we have a valid state file. now check the severity AND the text of the message - if they
+        # are identical, everything is still the same. If they changed, we have a state transition to alert on.
+        elif message.get('message', ' ') not in state.get('message', ''):
+            # the message changed, and the state is not OK. So update it.
+            if 'ok' not in message['severity']:
+                state = 'transitioned'
+            message['time'] = now
+
+        # perhaps people aren't using unique error messages, only state. that's OK, we'll trigger
+        # on state-only changes, of course:
+        elif (severity not in state.get('severity', '')):
+            # doesn't match? the message AND severity changed
             state = 'transitioned'
+            message['time'] = now
+
+        # if we're not updating the time, add the old one back to the new message, which will get
+        # written to the state file:
+        if 'time' not in message:
+            message['time'] = state.get('time', '')
 
         # make available externally
         self.cur_state = state
 
-        # write the current state:
+        # write the current state (every time!):
         with open(self.state_file, 'w') as fh:
-            fh.write(message['severity'])
+            fh.write(json.dumps(message))
 
         # if paging was requested, do it, unless the state is the same as last time
         if page and 'transitioned' in state and not self.no_alerts:
