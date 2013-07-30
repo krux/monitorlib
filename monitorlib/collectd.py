@@ -265,14 +265,14 @@ class Client:
             state = json.loads(read_state)
         except ValueError as err:
             # can't JSON decode it? May be old format, or had none existing. That's OK.
-            state = read_state
+            state = {}
 
-        if state is None or state is {} or state is '' or 'new' in state:
+        if state is None or state == {}:
             # state file didn't exist - first-run of this check, so don't alert if it's 'ok'
             if 'ok' not in message['severity']:
                 state = 'transitioned'
             else:
-                state = 'new'
+                state = {}
 
             message['time'] = now
 
@@ -294,7 +294,7 @@ class Client:
         # if we're not updating the time, add the old one back to the new message, which will get
         # written to the state file:
         if 'time' not in message:
-            message['time'] = state.get('time', '')
+            message['time'] = state.get('time', now)
 
         # make available externally
         self.cur_state = state
