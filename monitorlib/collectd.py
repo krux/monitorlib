@@ -115,6 +115,7 @@ class Client:
         self.state_file = self.state_dir + "/%s" % self.caller
         self.cur_state = None
         self.alert_message = None
+        self.alert_on_status_string_changes = True
         self.no_alerts = disable_alerts
 
     def failure(self, string, page=None, email=None, url=None, riemann=None):
@@ -169,6 +170,12 @@ class Client:
         """
         process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         return process.communicate()
+
+    def set_alert_on_status_string_changes(self, toggle=True):
+        """
+        dis/en -ables alerting on status string changes (only the state will trigger alerts)
+        """
+        self.alert_on_status_string_changes = toggle
 
     def set_pagerduty_store(self, kind='file', config='/tmp/incident_keys'):
         """
@@ -278,7 +285,7 @@ class Client:
 
         # so, we have a valid state file. now check the severity AND the text of the message - if they
         # are identical, everything is still the same. If they changed, we have a state transition to alert on.
-        elif message.get('message', ' ') not in state.get('message', ''):
+        elif message.get('message', ' ') not in state.get('message', '') and self.alert_on_status_string_changes:
             # the message changed, and the state is not OK. So update it.
             if 'ok' not in message['severity']:
                 state = 'transitioned'
