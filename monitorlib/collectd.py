@@ -204,7 +204,7 @@ class Client:
         self.state_dir = dir
         self.state_file = dir + "/%s" % self.caller
 
-    def disable_alerts():
+    def disable_alerts(self):
         self.no_alerts = True
 
     def check_redis_alerts_disabled(self, message):
