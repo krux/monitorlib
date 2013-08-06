@@ -251,8 +251,8 @@ class Client:
         message = {"host": self.fqdn.split('.')[0], "plugin": self.caller, "severity": severity, "message": message}
 
         # print the error, so when running plugins by hand we see the current state
-        # (collectd will ignore ill-formatted messages)
-        print "Dispatching alert with severity %s: %s." % (severity, message)
+        if not os.environ.get('COLLECTD_HOSTNAME'):
+            print "Dispatching alert with severity %s: %s." % (severity, message)
 
         # track this, to make it available to external users of the lib.
         # e.g. they may want to call send_to_pagerduty() directly if RiemannError is raised.

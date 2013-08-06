@@ -7,7 +7,7 @@
 from setuptools import setup, find_packages
 
 setup(name='monitorlib',
-      version="0.2.11",
+      version="0.2.12",
       description='Library for creating monitoring scripts/plugins',
       author='Paul Lathrop, Charlie Schluting',
       author_email='paul@krux.com, charlie@krux.com',
