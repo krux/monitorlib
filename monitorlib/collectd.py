@@ -220,11 +220,14 @@ class Client:
         if not conn:
             return False
         else:
-            global_acks = conn.get('global')
-            if global_acks and ('*' in global_acks or message['plugin'] in global_acks):
-                return True
-            else:
-                result = conn.get(message['host'])
+            try:
+                global_acks = conn.get('global')
+                if global_acks and ('*' in global_acks or message['plugin'] in global_acks):
+                    return True
+                else:
+                    result = conn.get(message['host'])
+            except redis.exceptions.RedisError:
+                return False
 
         if result and ('*' in result or message['plugin'] in result):
             return True
