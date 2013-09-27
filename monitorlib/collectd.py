@@ -313,8 +313,11 @@ class Client:
         with open(self.state_file, 'w') as fh:
             fh.write(json.dumps(message))
 
-        # if paging was requested, do it, unless the state is the same as last time
-        if page and 'transitioned' in state and not self.no_alerts:
+        # if paging was requested, do it, unless the state is the same as last time,
+        # except, if we're in OK, send that to PD because the lib won't do it unless
+        # there is an incident key. This is to make sure ACKs happen.. sometimes they
+        # get lost.
+        if page and not self.no_alerts and ('ok' in message['severity'] or 'transitioned' in state):
             if not self.pagerduty_key:
                 logging.error("must call set_pagerduty_key(), first")
             else:
