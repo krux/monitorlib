@@ -145,6 +145,15 @@ def send_to_pagerduty(message):
 
     pd_url = 'https://events.pagerduty.com/generic/2010-04-15/create_event.json'
 
+    ### there's a 1024 char message length:
+    ### http://developer.pagerduty.com/documentation/integration/events/trigger
+    desc = message.get('description','')
+    message['description'] = desc[:1022] + '..' if len(desc) > 1024 else desc
+
+    ### there's no max length on details, so put the description in there if
+    ### if we dont have deatils yet
+    message['details'] = message.get('details', desc) or desc
+
     req = urllib2.Request(pd_url, json.dumps(message), {'Content-Type': 'application/json'})
     f = urllib2.urlopen(req)
     resp = f.read()
