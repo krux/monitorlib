@@ -21,7 +21,7 @@ DEPENDENCIES = [unicode(package.req)
                 for package in parse_requirements(REQUIREMENTS)]
 
 setup(name='monitorlib',
-      version="0.2.13",
+      version="0.2.14",
       description='Library for creating monitoring scripts/plugins',
       author='Paul Lathrop, Charlie Schluting',
       author_email='paul@krux.com, charlie@krux.com',

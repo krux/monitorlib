@@ -145,10 +145,11 @@ def send_to_pagerduty(message):
 
     pd_url = 'https://events.pagerduty.com/generic/2010-04-15/create_event.json'
 
-    ### there's a 1024 char message length:
+    ### there's a 1024 char message length. That's still too much for a email
+    ### subject line, so cull it and add it to the details instead:
     ### http://developer.pagerduty.com/documentation/integration/events/trigger
     desc = message.get('description','')
-    message['description'] = desc[:1022] + '..' if len(desc) > 1024 else desc
+    message['description'] = desc[:254] + '..' if len(desc) > 256 else desc
 
     ### there's no max length on details, so put the description in there if
     ### if we dont have deatils yet
