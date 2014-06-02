@@ -1,3 +1,7 @@
-bernhard
-simplejson
-redis
+bernhard==0.1.0
+simplejson==3.5.2
+redis==2.9.1
+
+# Transitive dependencies
+protobuf==2.5.0
+wsgiref==0.1.2
