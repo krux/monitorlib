@@ -50,7 +50,8 @@
   metric: string of collectd metric (excluding host, it's added automatically) -
           make sure it's formatted as collectd expects, or it'll be dropped!
           (make sure last item is in /usr/share/collectd/types.db, to start)
-          Krux-specific: always use the gauge type, and it'll be removed by graphite. Counters are derived.
+          Krux-specific: always use the gauge type, and it'll be removed by graphite. Counters are
+          derived.
           To get stats.$env.ops.collectd.$host.plugin.instance.foo, use "plugin-instance/gauge-foo".
   value: integer value
 
@@ -59,21 +60,19 @@
   check plugins. But, that's old-school nagios style.
   Ideally, you'll simply wrap this library to set the defaults to False for everything
   but riemann. This will send all events to riemann.
-  In riemann, you can verify the state of other checks (LB status, cluster health, parent relationships,
-  etc) before alerting (or even displaying a status) for real.
+  In riemann, you can verify the state of other checks (LB status, cluster health, parent
+  elationships, etc) before alerting (or even displaying a status) for real.
 
 """
 import socket
 import os
 import sys
 import subprocess
-import inspect
 import logging
 import urllib2
 import smtplib
 import time
 from time import gmtime, strftime
-from optparse import OptionParser
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEText import MIMEText
 try:
@@ -94,6 +93,8 @@ except ImportError:
 
 import monitorlib.pagerduty as pagerduty
 
+
+### XXX DANGER! DANGER WILL ROBINSON! OLD-STYLE CLASS DETECTED!
 class Client:
 
     def __init__(self, page=False, email=False, url=False, riemann=False, disable_alerts=False):
@@ -168,7 +169,8 @@ class Client:
         """ Helper for running shell commands with subprocess().
             Returns: (stdout, stderr)
         """
-        process = subprocess.Popen(command, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        process = subprocess.Popen(command, shell=True,
+                                   stderr=subprocess.PIPE, stdout=subprocess.PIPE)
         return process.communicate()
 
     def set_alert_on_status_string_changes(self, toggle=True):
@@ -190,7 +192,8 @@ class Client:
         """
         self.riemann = {'host': host, 'port': port, }
 
-    def set_redis_config(self, writer_host, reader_host, writer_port, reader_port, password, db='db0'):
+    def set_redis_config(self, writer_host, reader_host, writer_port, reader_port,
+                         password, db='db0'):
         self.redis_config = {'writer': writer_host,
                              'reader': reader_host,
                              'writer_port': writer_port,
@@ -215,7 +218,8 @@ class Client:
         conf = self.redis_config
 
         # key: host, value: list of plugins that are disabled (or '*' for all)
-        conn = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'], socket_timeout=2)
+        conn = redis.Redis(conf['reader'], conf['reader_port'], conf['db'], conf['passwd'],
+                           socket_timeout=2)
 
         if not conn:
             return False
@@ -251,7 +255,8 @@ class Client:
         """
 
         now = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        message = {"host": self.fqdn.split('.')[0], "plugin": self.caller, "severity": severity, "message": message}
+        message = {"host": self.fqdn.split('.')[0], "plugin": self.caller,
+                   "severity": severity, "message": message}
 
         # print the error, so when running plugins by hand we see the current state
         if not os.environ.get('COLLECTD_HOSTNAME'):
@@ -266,14 +271,15 @@ class Client:
             if not self.redis_config:
                 logging.error("must call redis_config(), first")
             elif self.check_redis_alerts_disabled(message):
-                logging.info("alerting disabled, supressing alert for: %s, %s" % (message['host'], message['plugin']))
+                logging.info("alerting disabled, supressing alert for: %s, %s" % (
+                    message['host'], message['plugin']))
                 return None
 
         # get last_state:
         read_state = self.get_current_state()
         try:
             state = json.loads(read_state)
-        except ValueError as err:
+        except ValueError:
             # can't JSON decode it? May be old format, or had none existing. That's OK.
             state = {}
 
@@ -286,9 +292,11 @@ class Client:
 
             message['time'] = now
 
-        # so, we have a valid state file. now check the severity AND the text of the message - if they
-        # are identical, everything is still the same. If they changed, we have a state transition to alert on.
-        elif message.get('message', ' ') not in state.get('message', '') and self.alert_on_status_string_changes:
+        # so, we have a valid state file. now check the severity AND the text of the message - if
+        # they are identical, everything is still the same. If they changed, we have a state
+        # transition to alert on.
+        elif (message.get('message', ' ') not in state.get('message', '')
+              and self.alert_on_status_string_changes):
             # the message changed, and the state is not OK. So update it.
             if 'ok' not in message['severity']:
                 state = 'transitioned'
@@ -380,7 +388,8 @@ class Client:
         else:
             pagerduty.authenticate(self.pagerduty_key)
 
-        send_string = "%s: %s %s: %s" % (message['severity'].upper(), message['host'], message['plugin'], message['message'])
+        send_string = "%s: %s %s: %s" % (message['severity'].upper(), message['host'],
+                                         message['plugin'], message['message'])
 
         if 'okay' in message['severity']:
             pagerduty.event('resolve', send_string)
@@ -418,7 +427,7 @@ class Client:
         alert_subject = "%s %s: %s" % (message['host'], message['plugin'], message['message'])
 
         me = 'collectd@krux.com'
-        you = [address.lstrip().rstrip() for address in address.split(',')]
+        you = [addr.lstrip().rstrip() for addr in address.split(',')]
 
         msg = MIMEMultipart()
         msg['Subject'] = '[collectd] %s %s' % (message['severity'].upper(), alert_subject)
